@@ -11,12 +11,12 @@ makedepends=('cargo')
 depends=('glibc' 'gcc-libs' 'pacman')
 optdepends=('curl: for waka fetch')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-# TODO: compute the real checksum once the v$pkgver tag exists on GitHub:
-#   curl -L https://github.com/Shisones/Waka/archive/v$pkgver.tar.gz | sha256sum
-sha256sums=('0000000000000000000000000000000000000000000000000000000000000000')
+sha256sums=('3308d06e4c00bc8ee7a0a0686d30e1459cec8f3e7c3dbecb86c987675790f8fa')
 
 prepare() {
     export RUSTUP_TOOLCHAIN=stable
+    cd "$srcdir"
+    mv "Waka-$pkgver" "$pkgname-$pkgver"
     cd "$srcdir/$pkgname-$pkgver"
     cargo fetch --locked
 }

@@ -30,7 +30,7 @@ paru -S waka        # builds from source
 paru -S waka-bin    # prebuilt binary from GitHub releases
 ```
 
-Both PKGBUILDs are in this repo: `PKGBUILD` (source build) and `waka-bin/PKGBUILD` (binary).
+Both PKGBUILDs are in this repo: `PKGBUILD` (source build) and `dist/PKGBUILD` (binary).
 
 ## Configuration
 

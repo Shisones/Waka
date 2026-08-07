@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update system and install build dependencies
+        run: pacman -Syu --noconfirm rust curl github-cli
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Determine release tag
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="$GITHUB_REF_NAME"
+          fi
+          if [ -z "$TAG" ]; then
+            echo "::error::No tag provided" >&2
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Package asset
+        run: |
+          TAG="${{ steps.resolve.outputs.tag }}"
+          mkdir -p dist
+          cp target/release/waka dist/waka
+          cp License dist/LICENSE
+          tar -C dist -czf "dist/waka-${TAG#v}-x86_64.tar.gz" waka LICENSE
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.resolve.outputs.tag }}"
+          ASSET="dist/waka-${TAG#v}-x86_64.tar.gz"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ASSET" --clobber
+          else
+            gh release create "$TAG" "$ASSET" --generate-notes
+          fi

@@ -12,8 +12,7 @@ conflicts=('waka')
 depends=('glibc' 'gcc-libs' 'pacman')
 optdepends=('curl: for waka fetch')
 source=("waka-$pkgver-x86_64.tar.gz::https://github.com/Shisones/Waka/releases/download/v$pkgver/waka-$pkgver-x86_64.tar.gz")
-# TODO: run `updpkgsums` once the v$pkgver release asset exists on GitHub
-sha256sums=('SKIP')
+sha256sums=('aec795c0ea300d5bc90de2cd56a35f3b573e31156522523cc313c010f82ff9fa')
 
 package() {
     install -Dm755 "$srcdir/waka" "$pkgdir/usr/bin/waka"

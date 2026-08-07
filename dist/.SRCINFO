@@ -12,6 +12,6 @@ pkgbase = waka-bin
 	provides = waka
 	conflicts = waka
 	source = waka-0.1.0-x86_64.tar.gz::https://github.com/Shisones/Waka/releases/download/v0.1.0/waka-0.1.0-x86_64.tar.gz
-	sha256sums = SKIP
+	sha256sums = aec795c0ea300d5bc90de2cd56a35f3b573e31156522523cc313c010f82ff9fa
 
 pkgname = waka-bin

@@ -1,9 +1,9 @@
 use crate::alpm::{callbacks, handle::AlpmHandle, transaction};
 use crate::config::Config;
 use crate::constants;
-use crate::display::{format as fmt, render, style, table};
+use crate::display::{db, format as fmt, render, style, table};
 use anyhow::Result;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 fn detail_from_prep_err(e: alpm::PrepareError<'_>) -> Option<String> {
@@ -39,18 +39,20 @@ pub fn run_update() -> Result<()> {
     let mut handle = AlpmHandle::new()?;
     let h = &mut handle.handle;
 
-    let bytes = Arc::new(Mutex::new(HashMap::<String, (i64, i64)>::new()));
-    for db in h.syncdbs() {
-        bytes.lock().unwrap().insert(db.name().to_string(), (0, 0));
+    let state = Arc::new(Mutex::new(db::DbSyncState::default()));
+    {
+        let mut s = state.lock().unwrap();
+        for db in h.syncdbs() {
+            s.bytes.insert(db.name().to_string(), (0, 0));
+        }
     }
-    let cb = Arc::clone(&bytes);
-    h.set_dl_cb(cb, |fname, event, bytes| {
-        let fname = fname.rsplit('/').next().unwrap_or(fname);
-        let repo = fname.strip_suffix(".db.part").unwrap_or(fname).strip_suffix(".db").unwrap_or(fname).to_string();
-        if let Some(b) = bytes.lock().unwrap().get_mut(&repo) {
+    let cb = Arc::clone(&state);
+    h.set_dl_cb(cb, |fname, event, arc| {
+        if let Ok(mut s) = arc.lock() {
             match event.event() {
-                alpm::DownloadEvent::Progress(p) => *b = (p.downloaded, p.total),
-                alpm::DownloadEvent::Completed(c) => *b = (c.total, c.total),
+                alpm::DownloadEvent::Init(_) => s.update(fname, 0, 0),
+                alpm::DownloadEvent::Progress(p) => s.update(fname, p.downloaded, p.total),
+                alpm::DownloadEvent::Completed(c) => s.update(fname, c.total, c.total),
                 _ => {}
             }
         }
@@ -59,33 +61,11 @@ pub fn run_update() -> Result<()> {
     h.syncdbs_mut().update(false).map_err(|e| anyhow::anyhow!("database update failed: {}", e))?;
 
     {
-        use crate::display::{draw, format as fmt};
-        let w = draw::term_width();
-        let b = bytes.lock().unwrap();
-        let mut names: Vec<String> = h.syncdbs().iter().map(|db| db.name().to_string()).collect();
-        names.sort();
-        let max_nw = names.iter().map(|n| draw::display_width(n)).max().unwrap_or(1).max(1);
-
-        let mut size_strs: Vec<String> = Vec::new();
-        for name in &names {
-            let (dl, _) = b.get(name).copied().unwrap_or((0, 0));
-            size_strs.push(if dl > 0 { fmt::format_size(dl) } else { "0 B".to_string() });
-        }
-        let max_sw = size_strs.iter().map(|s| draw::display_width(s)).max().unwrap_or(3);
-
-        for (name, size_str) in names.iter().zip(size_strs.iter()) {
-            let (dl, tot) = b.get(name).copied().unwrap_or((0, 0));
-            let pct = if tot > 0 { dl as f64 / tot as f64 * 100.0 } else { 100.0 };
-            let padded_size = format!("{:>width$}", size_str, width = max_sw);
-            let npad = " ".repeat(max_nw.saturating_sub(draw::display_width(name)));
-            let name_prefix = format!(" {}{} ", name, npad);
-            let max_bar = ((w as f64 * 0.25) as usize).min(50);
-            let bar_w = (w.saturating_sub(draw::display_width(&name_prefix) + 3 + max_sw + 2)).min(max_bar).max(10);
-            let filled = ((pct / 100.0) * bar_w as f64) as usize;
-            let bar = format!("{}{}", "━".repeat(filled), "─".repeat(bar_w.saturating_sub(filled)));
-            let block = format!("[{}] {} ", bar, padded_size);
-            let pad = w.saturating_sub(draw::display_width(&name_prefix) + draw::display_width(&block)).max(2);
-            println!("{}{}{}", name_prefix, " ".repeat(pad), block);
+        let names: Vec<String> = h.syncdbs().iter().map(|db| db.name().to_string()).collect();
+        let mut b = state.lock().unwrap();
+        b.done();
+        for line in db::db_sync_lines(&b.bytes, &names) {
+            println!("{line}");
         }
     }
 
@@ -578,18 +558,20 @@ pub fn run_upgrade(assume_yes: bool, autoremove: bool) -> Result<()> {
     let mut handle = AlpmHandle::new()?;
     let h = &mut handle.handle;
 
-    let bytes = Arc::new(Mutex::new(HashMap::<String, (i64, i64)>::new()));
-    for db in h.syncdbs() {
-        bytes.lock().unwrap().insert(db.name().to_string(), (0, 0));
+    let state = Arc::new(Mutex::new(db::DbSyncState::default()));
+    {
+        let mut s = state.lock().unwrap();
+        for db in h.syncdbs() {
+            s.bytes.insert(db.name().to_string(), (0, 0));
+        }
     }
-    let cb = Arc::clone(&bytes);
-    h.set_dl_cb(cb, |fname, event, bytes| {
-        let fname = fname.rsplit('/').next().unwrap_or(fname);
-        let repo = fname.strip_suffix(".db.part").unwrap_or(fname).strip_suffix(".db").unwrap_or(fname).to_string();
-        if let Some(b) = bytes.lock().unwrap().get_mut(&repo) {
+    let cb = Arc::clone(&state);
+    h.set_dl_cb(cb, |fname, event, arc| {
+        if let Ok(mut s) = arc.lock() {
             match event.event() {
-                alpm::DownloadEvent::Progress(p) => *b = (p.downloaded, p.total),
-                alpm::DownloadEvent::Completed(c) => *b = (c.total, c.total),
+                alpm::DownloadEvent::Init(_) => s.update(fname, 0, 0),
+                alpm::DownloadEvent::Progress(p) => s.update(fname, p.downloaded, p.total),
+                alpm::DownloadEvent::Completed(c) => s.update(fname, c.total, c.total),
                 _ => {}
             }
         }
@@ -598,33 +580,11 @@ pub fn run_upgrade(assume_yes: bool, autoremove: bool) -> Result<()> {
     h.syncdbs_mut().update(false).map_err(|e| anyhow::anyhow!("database update failed: {}", e))?;
 
     {
-        use crate::display::{draw, format as fmt};
-        let w = draw::term_width();
-        let b = bytes.lock().unwrap();
-        let mut names: Vec<String> = h.syncdbs().iter().map(|db| db.name().to_string()).collect();
-        names.sort();
-        let max_nw = names.iter().map(|n| draw::display_width(n)).max().unwrap_or(1).max(1);
-
-        let mut size_strs: Vec<String> = Vec::new();
-        for name in &names {
-            let (dl, _) = b.get(name).copied().unwrap_or((0, 0));
-            size_strs.push(if dl > 0 { fmt::format_size(dl) } else { "0 B".to_string() });
-        }
-        let max_sw = size_strs.iter().map(|s| draw::display_width(s)).max().unwrap_or(3);
-
-        for (name, size_str) in names.iter().zip(size_strs.iter()) {
-            let (dl, tot) = b.get(name).copied().unwrap_or((0, 0));
-            let pct = if tot > 0 { dl as f64 / tot as f64 * 100.0 } else { 100.0 };
-            let padded_size = format!("{:>width$}", size_str, width = max_sw);
-            let npad = " ".repeat(max_nw.saturating_sub(draw::display_width(name)));
-            let name_prefix = format!(" {}{} ", name, npad);
-            let max_bar = ((w as f64 * 0.25) as usize).min(50);
-            let bar_w = (w.saturating_sub(draw::display_width(&name_prefix) + 3 + max_sw + 2)).min(max_bar).max(10);
-            let filled = ((pct / 100.0) * bar_w as f64) as usize;
-            let bar = format!("{}{}", "━".repeat(filled), "─".repeat(bar_w.saturating_sub(filled)));
-            let block = format!("[{}] {} ", bar, padded_size);
-            let pad = w.saturating_sub(draw::display_width(&name_prefix) + draw::display_width(&block)).max(2);
-            println!("{}{}{}", name_prefix, " ".repeat(pad), block);
+        let names: Vec<String> = h.syncdbs().iter().map(|db| db.name().to_string()).collect();
+        let mut b = state.lock().unwrap();
+        b.done();
+        for line in db::db_sync_lines(&b.bytes, &names) {
+            println!("{line}");
         }
     }
 

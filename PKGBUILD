@@ -1,7 +1,7 @@
 # Maintainer: Shisones <shisones745@proton.me>
 
 pkgname=waka
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc="A front-end for libalpm, inspired by nala"
 url="https://github.com/Shisones/Waka"

@@ -1,6 +1,6 @@
 [package]
 name = "waka"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 
 description = "A front-end for libalpm, inspired by nala"

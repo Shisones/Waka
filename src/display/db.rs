@@ -1,0 +1,109 @@
+use crate::display::{draw, format as fmt};
+use std::collections::{HashMap, HashSet};
+use std::io::{IsTerminal, Write};
+use std::time::{Duration, Instant};
+
+pub struct DbSyncState {
+    pub bytes: HashMap<String, (i64, i64)>,
+    active: HashSet<String>,
+    rendered: usize,
+    last_render: Instant,
+}
+
+impl Default for DbSyncState {
+    fn default() -> Self {
+        DbSyncState {
+            bytes: HashMap::new(),
+            active: HashSet::new(),
+            rendered: 0,
+            last_render: Instant::now() - Duration::from_millis(200),
+        }
+    }
+}
+
+impl DbSyncState {
+    pub fn update(&mut self, fname: &str, downloaded: i64, total: i64) {
+        let fname = fname.rsplit('/').next().unwrap_or(fname);
+        let repo = fname.strip_suffix(".db.part").or_else(|| fname.strip_suffix(".db")).unwrap_or(fname);
+        if !self.bytes.contains_key(repo) { return; }
+        self.bytes.insert(repo.to_string(), (downloaded, total));
+        self.active.insert(repo.to_string());
+        self.render();
+    }
+
+    pub fn active_repos(&self) -> Vec<String> {
+        let mut repos: Vec<String> = self.active.iter().cloned().collect();
+        repos.sort();
+        repos
+    }
+
+    pub fn render(&mut self) {
+        let now = Instant::now();
+        if now.duration_since(self.last_render).as_millis() < 50 { return; }
+        self.last_render = now;
+        if !std::io::stdout().is_terminal() { return; }
+        for _ in 0..self.rendered { print!("\r\x1b[K\x1b[1A"); }
+        self.rendered = 0;
+        for line in self.live_lines() { println!("{line}"); }
+        self.rendered = self.active.len();
+        let _ = std::io::stdout().flush();
+    }
+
+    pub fn done(&mut self) {
+        if self.rendered > 0 && std::io::stdout().is_terminal() {
+            for _ in 0..self.rendered { print!("\r\x1b[K\x1b[1A"); }
+            print!("\r\x1b[K");
+            let _ = std::io::stdout().flush();
+        }
+        self.rendered = 0;
+    }
+
+    fn live_lines(&self) -> Vec<String> {
+        let w = draw::term_width();
+        let mut names: Vec<String> = self.active.iter().cloned().collect();
+        names.sort();
+        let max_nw = names.iter().map(|n| draw::display_width(n)).max().unwrap_or(1).max(1);
+        let max_sw = names.iter()
+            .map(|n| {
+                let (dl, _) = self.bytes.get(n).copied().unwrap_or((0, 0));
+                if dl > 0 { draw::display_width(&fmt::format_size(dl)) } else { 3 }
+            })
+            .max()
+            .unwrap_or(3);
+        names.iter().map(|n| {
+            let (dl, tot) = self.bytes.get(n).copied().unwrap_or((0, 0));
+            bar_line(n, dl, tot, max_nw, max_sw, w, 0.0)
+        }).collect()
+    }
+}
+
+pub fn bar_line(name: &str, dl: i64, tot: i64, max_nw: usize, max_sw: usize, w: usize, unknown_pct: f64) -> String {
+    let pct = if tot > 0 { dl as f64 / tot as f64 * 100.0 } else { unknown_pct };
+    let size_str = if dl > 0 { fmt::format_size(dl) } else { "0 B".to_string() };
+    let padded_size = format!("{:>width$}", size_str, width = max_sw);
+    let npad = " ".repeat(max_nw.saturating_sub(draw::display_width(name)));
+    let name_prefix = format!(" {}{} ", name, npad);
+    let max_bar = ((w as f64 * 0.25) as usize).min(50);
+    let bar_w = (w.saturating_sub(draw::display_width(&name_prefix) + 3 + max_sw + 2)).min(max_bar).max(10);
+    let filled = ((pct / 100.0) * bar_w as f64) as usize;
+    let bar = format!("{}{}", "━".repeat(filled), "─".repeat(bar_w.saturating_sub(filled)));
+    let block = format!("[{}] {} ", bar, padded_size);
+    let pad = w.saturating_sub(draw::display_width(&name_prefix) + draw::display_width(&block)).max(2);
+    format!("{}{}{}", name_prefix, " ".repeat(pad), block)
+}
+
+pub fn db_sync_lines(bytes: &HashMap<String, (i64, i64)>, names: &[String]) -> Vec<String> {
+    let w = draw::term_width();
+    let max_nw = names.iter().map(|n| draw::display_width(n)).max().unwrap_or(1).max(1);
+    let max_sw = names.iter()
+        .map(|n| {
+            let (dl, _) = bytes.get(n).copied().unwrap_or((0, 0));
+            if dl > 0 { draw::display_width(&fmt::format_size(dl)) } else { 3 }
+        })
+        .max()
+        .unwrap_or(3);
+    names.iter().map(|n| {
+        let (dl, tot) = bytes.get(n).copied().unwrap_or((0, 0));
+        bar_line(n, dl, tot, max_nw, max_sw, w, 100.0)
+    }).collect()
+}

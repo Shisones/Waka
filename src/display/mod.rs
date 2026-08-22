@@ -1,3 +1,4 @@
+pub mod db;
 pub mod draw;
 pub mod format;
 pub mod render;

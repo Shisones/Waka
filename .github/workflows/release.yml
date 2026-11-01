@@ -51,7 +51,7 @@ jobs:
           TAG="${{ steps.resolve.outputs.tag }}"
           mkdir -p dist
           cp target/release/waka dist/waka
-          cp License dist/LICENSE
+          cp LICENSE dist/LICENSE
           tar -C dist -czf "dist/waka-${TAG#v}-x86_64.tar.gz" waka LICENSE
 
       - name: Publish release

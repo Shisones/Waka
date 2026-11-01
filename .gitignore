@@ -1,2 +1,6 @@
 /target
 *.tar.gz
+/pkg/
+/src/waka-*/
+/*.pkg.tar.zst
+/*.pkg.tar.zst.sig

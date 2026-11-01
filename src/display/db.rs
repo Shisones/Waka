@@ -44,8 +44,11 @@ impl DbSyncState {
         if !std::io::stdout().is_terminal() { return; }
         for _ in 0..self.rendered { print!("\r\x1b[K\x1b[1A"); }
         self.rendered = 0;
-        for line in self.live_lines() { println!("{line}"); }
-        self.rendered = self.active.len();
+        let lines = self.live_lines();
+        let cap = draw::term_rows().saturating_sub(1).max(1);
+        let shown = lines.len().min(cap);
+        for line in lines.iter().take(shown) { println!("{line}"); }
+        self.rendered = shown;
         let _ = std::io::stdout().flush();
     }
 
@@ -78,17 +81,32 @@ impl DbSyncState {
 }
 
 pub fn bar_line(name: &str, dl: i64, tot: i64, max_nw: usize, max_sw: usize, w: usize, unknown_pct: f64) -> String {
-    let pct = if tot > 0 { dl as f64 / tot as f64 * 100.0 } else { unknown_pct };
+    let pct = if tot > 0 { (dl as f64 / tot as f64 * 100.0).min(100.0) } else { unknown_pct };
     let size_str = if dl > 0 { fmt::format_size(dl) } else { "0 B".to_string() };
     let padded_size = format!("{:>width$}", size_str, width = max_sw);
     let npad = " ".repeat(max_nw.saturating_sub(draw::display_width(name)));
     let name_prefix = format!(" {}{} ", name, npad);
+    let name_w = draw::display_width(&name_prefix);
+    let tail = format!("{} ", padded_size);
+    let tail_w = draw::display_width(&tail);
+
+    // Not even the name and size fit: show what there is rather than overflow.
+    if name_w + tail_w > w {
+        return draw::truncate(&format!("{}{} {}", name, " ".repeat(npad.len()), padded_size), w);
+    }
+
     let max_bar = ((w as f64 * 0.25) as usize).min(50);
-    let bar_w = (w.saturating_sub(draw::display_width(&name_prefix) + 3 + max_sw + 2)).min(max_bar).max(10);
-    let filled = ((pct / 100.0) * bar_w as f64) as usize;
-    let bar = format!("{}{}", "━".repeat(filled), "─".repeat(bar_w.saturating_sub(filled)));
-    let block = format!("[{}] {} ", bar, padded_size);
-    let pad = w.saturating_sub(draw::display_width(&name_prefix) + draw::display_width(&block)).max(2);
+    let bar_space = w.saturating_sub(name_w + tail_w + 2);
+    if bar_space < 10 {
+        let gap = w - name_w - tail_w;
+        return format!("{}{}{}", name_prefix, " ".repeat(gap), tail);
+    }
+
+    let bar_w = bar_space.min(max_bar).max(10).min(bar_space);
+    let filled = (((pct / 100.0) * bar_w as f64) as usize).min(bar_w);
+    let bar = format!("{}{}", "━".repeat(filled), "─".repeat(bar_w - filled));
+    let block = format!("[{}] {}", bar, padded_size);
+    let pad = w.saturating_sub(name_w + draw::display_width(&block));
     format!("{}{}{}", name_prefix, " ".repeat(pad), block)
 }
 

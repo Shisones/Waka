@@ -1,4 +1,34 @@
-use waka::display::draw::{display_width, progress_bar, strip_ansi};
+use waka::display::draw::{box_bottom_w, box_row_w, box_top_w, display_width, progress_bar, strip_ansi, truncate};
+
+#[test]
+fn box_lines_never_exceed_width() {
+    let long = "\x1b[1;32mfirefox-136.0-1-x86_64.pkg.tar.zst\x1b[0m";
+    for w in 1..=120 {
+        assert!(display_width(&box_top_w("Download", w)) <= w, "top at {w}");
+        assert!(display_width(&box_bottom_w(w)) <= w, "bottom at {w}");
+        assert!(display_width(&box_row_w(long, w)) <= w, "row at {w}");
+    }
+}
+
+#[test]
+fn truncate_keeps_escape_sequences_whole() {
+    let out = truncate("\x1b[1;32mabcdefghij\x1b[0m", 5);
+    assert!(display_width(&out) <= 5);
+    assert!(out.starts_with("\x1b[1;32m"));
+    assert!(out.contains("\x1b[0m"));
+    assert!(out.ends_with('\u{2026}'));
+    assert_eq!(strip_ansi(&out), "abcd\u{2026}");
+}
+
+#[test]
+fn truncate_zero_columns_is_empty() {
+    assert_eq!(truncate("anything", 0), "");
+}
+
+#[test]
+fn progress_bar_handles_zero_width() {
+    assert_eq!(progress_bar(50.0, 0), "");
+}
 
 #[test]
 fn progress_bar_full_and_empty() {

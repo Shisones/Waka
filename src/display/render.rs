@@ -124,43 +124,76 @@ impl DownloadState {
     }
 
     pub fn build(&self) -> Vec<String> {
-        let w = draw::term_width();
+        self.build_at(draw::term_width(), draw::term_rows())
+    }
+
+    pub fn build_at(&self, w: usize, rows: usize) -> Vec<String> {
+        let body_cap = rows.saturating_sub(3);
         let mut out = Vec::new();
 
         if self.total_files > 0 && !self.phase {
-            out.push(draw::box_top(&style::bold("Download")));
+            out.push(draw::box_top_w(&style::bold("Download"), w));
+            let mut body: Vec<String> = Vec::new();
             let start = self.completed_downloads.len().saturating_sub(5);
             for name in &self.completed_downloads[start..] {
-                out.push(draw::box_row(&format!("{} {}", style::green("Completed:"), name)));
+                body.push(draw::box_row_w(&format!("{} {}", style::green("Completed:"), name), w));
             }
             if let Some(fname) = &self.currently_downloading {
-                out.push(draw::box_row(&format!("{} {}", style::cyan("Downloading:"), fname)));
+                body.push(draw::box_row_w(&format!("{} {}", style::cyan("Downloading:"), fname), w));
             } else if self.completed_downloads.is_empty() {
-                out.push(draw::box_row(&style::cyan("Starting Downloads...")));
+                body.push(draw::box_row_w(&style::cyan("Starting Downloads..."), w));
             }
-            let pct = if self.total_bytes > 0 { self.completed_bytes as f64 / self.total_bytes as f64 * 100.0 } else { 0.0 };
-            let inner = w.saturating_sub(4);
-            let elapsed = self.start.elapsed().as_secs_f64();
-            let prefix = format!("{} {} [", style::cyan("Time Remaining:"), self.eta(elapsed));
-            let suffix = format!("] {} {} {} {} {}",
-                style::color(&format!("{:>6.1}%", pct), style::Color::Blue),
-                style::bold("\u{2022}"), style::green(&self.dl_status()),
-                style::bold("\u{2022}"), style::color(&self.speed(elapsed), style::Color::Blue));
-            let prefix_w = draw::display_width(&prefix);
-            let suffix_w = draw::display_width(&suffix);
-            let bar_w = inner.saturating_sub(prefix_w + suffix_w).max(4);
-            let bar = draw::progress_bar(pct, bar_w);
-            out.push(draw::box_row(&format!("{}{}{}", prefix, bar, suffix)));
+            let skip = body.len().saturating_sub(body_cap);
+            out.extend(body.into_iter().skip(skip));
+            out.push(self.progress_line(w));
         } else if !self.log.is_empty() {
-            out.push(draw::box_top(&self.title));
-            let start = self.log.len().saturating_sub(5);
-            for entry in &self.log[start..] { out.push(draw::box_row(entry)); }
+            out.push(draw::box_top_w(&self.title, w));
+            let start = self.log.len().saturating_sub(5.min(body_cap));
+            for entry in &self.log[start..] {
+                out.push(draw::box_row_w(entry, w));
+            }
         } else {
-            out.push(draw::box_top(&self.title));
-            out.push(draw::box_row(&format!("{}...", style::dim("Preparing"))));
+            out.push(draw::box_top_w(&self.title, w));
+            out.push(draw::box_row_w(&format!("{}...", style::dim("Preparing")), w));
         }
 
-        out.push(draw::box_bottom());
+        out.push(draw::box_bottom_w(w));
         out
+    }
+
+    /// The progress line loses detail as the terminal narrows instead of
+    /// spilling past the box.
+    fn progress_line(&self, w: usize) -> String {
+        let pct = if self.total_bytes > 0 {
+            self.completed_bytes as f64 / self.total_bytes as f64 * 100.0
+        } else {
+            0.0
+        };
+        let elapsed = self.start.elapsed().as_secs_f64();
+        let pct_s = format!("{:>6.1}%", pct);
+        let sep = style::bold("\u{2022}");
+        let bytes = style::green(&self.dl_status());
+        let speed = style::color(&self.speed(elapsed), style::Color::Blue);
+        let inner = w.saturating_sub(4);
+
+        let tiers = [
+            (
+                format!("{} {} [", style::cyan("Time Remaining:"), self.eta(elapsed)),
+                format!("] {} {} {} {} {}", pct_s, sep, bytes, sep, speed),
+            ),
+            (
+                format!("{} {} [", style::cyan("ETA:"), self.eta(elapsed)),
+                format!("] {} {}", pct_s, bytes),
+            ),
+            ("[".to_string(), format!("] {}", pct_s)),
+        ];
+        for (prefix, suffix) in tiers {
+            let used = draw::display_width(&prefix) + draw::display_width(&suffix);
+            if used + 6 <= inner {
+                let bar = draw::progress_bar(pct, inner - used);
+                return draw::box_row_w(&format!("{prefix}{bar}{suffix}"), w);
+            }
+        }
+        draw::box_row_w(&pct_s, w)
     }
 }

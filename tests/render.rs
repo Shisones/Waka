@@ -1,7 +1,42 @@
 mod common;
 
 use common::download_state;
+use waka::display::draw::display_width;
 use waka::display::render::pkg_name_from_filename;
+
+fn assert_fits(state: &waka::display::render::DownloadState, w: usize, rows: usize) {
+    let lines = state.build_at(w, rows);
+    assert!(lines.len() <= rows.max(3), "{} lines at w={w} rows={rows}", lines.len());
+    for line in &lines {
+        assert!(display_width(line) <= w, "w={w} rows={rows} line={line:?}");
+    }
+}
+
+#[test]
+fn download_box_fits_small_terminals() {
+    let mut s = download_state(512 * 1024, 4 * 1024 * 1024);
+    s.total_files = 4;
+    s.completed_downloads = vec!["a-very-long-package-name-1.0-1-x86_64".to_string()];
+    s.currently_downloading = Some("another-long-package-name-2.0-1-x86_64.pkg.tar.zst".to_string());
+    for w in 1..=120 {
+        for rows in [4, 6, 24, 60] {
+            assert_fits(&s, w, rows);
+        }
+    }
+}
+
+#[test]
+fn log_box_fits_small_terminals() {
+    let mut s = download_state(0, 0);
+    s.phase = true;
+    s.log = vec!["\x1b[1;32mInstalling:\x1b[0m firefox 136.0-1".to_string(); 20];
+    for w in 1..=120 {
+        for rows in [4, 8, 24] {
+            assert_fits(&s, w, rows);
+        }
+    }
+}
+
 
 #[test]
 fn pkg_name_from_arch_specific_package() {

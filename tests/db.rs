@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use waka::display::db::{bar_line, db_sync_lines, DbSyncState};
+use waka::display::draw::display_width;
 
 fn state_with_repos(repos: &[&str]) -> DbSyncState {
     let mut s = DbSyncState::default();
@@ -92,4 +93,17 @@ fn db_sync_lines_marks_untouched_repo_as_done() {
     let lines = db_sync_lines(&b, &["core".to_string()]);
     assert!(lines[0].contains('━'));
     assert!(lines[0].contains("0 B"));
+}
+#[test]
+fn bar_line_fits_narrow_widths() {
+    for w in 1..=120 {
+        let line = bar_line("extra", 700, 1024, 5, 7, w, 0.0);
+        assert!(display_width(&line) <= w, "w={w}: {line:?}");
+    }
+}
+
+#[test]
+fn bar_line_clamps_progress_past_total() {
+    let line = bar_line("core", 4096, 1024, 4, 7, 80, 0.0);
+    assert_eq!(line.chars().filter(|&c| c == '─').count(), 0);
 }

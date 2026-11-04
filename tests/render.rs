@@ -106,15 +106,18 @@ fn current_download_uses_the_package_name() {
 }
 
 #[test]
-fn progress_line_is_bar_first_and_drops_eta_when_narrow() {
+fn progress_splits_into_bar_and_centred_details() {
     let mut s = download_state(512, 2048);
     s.total_files = 1;
     let wide = s.build_at(120, 24);
-    let line = wide.iter().find(|l| l.contains('%')).expect("wide progress");
-    assert!(line.contains('['), "{line:?}");
-    assert!(line.contains("ETA"), "{line:?}");
+    let bar = wide.iter().find(|l| l.contains('━')).expect("bar row");
+    assert!(bar.contains('━') || bar.contains('─'), "{bar:?}");
+    assert!(!bar.contains('%'), "{bar:?}");
+    assert_eq!(display_width(bar), 120, "{bar:?}");
+    let details = wide.iter().find(|l| l.contains('%')).expect("detail row");
+    assert!(details.contains("ETA"), "{details:?}");
 
     let narrow = s.build_at(30, 24);
-    let line = narrow.iter().find(|l| l.contains('%')).expect("narrow progress");
-    assert!(!line.contains("ETA"), "{line:?}");
+    let details = narrow.iter().find(|l| l.contains('%')).expect("narrow detail");
+    assert!(!details.contains("ETA"), "{details:?}");
 }

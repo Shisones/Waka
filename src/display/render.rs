@@ -171,6 +171,8 @@ impl DownloadState {
         let mut out = Vec::new();
 
         if self.total_files > 0 && !self.phase {
+            // The bar and its detail line take two rows.
+            let body_cap = body_cap.saturating_sub(1);
             out.push(draw::box_top_w(&style::bold("Download"), w));
             let mut body: Vec<String> = Vec::new();
             let start = self.completed_downloads.len().saturating_sub(5);
@@ -185,7 +187,7 @@ impl DownloadState {
             }
             let skip = body.len().saturating_sub(body_cap);
             out.extend(body.into_iter().skip(skip));
-            out.push(self.progress_line(w));
+            out.extend(self.progress_rows(w));
         } else if !self.log.is_empty() {
             out.push(draw::box_top_w(&self.title, w));
             let start = self.log.len().saturating_sub(5.min(body_cap));
@@ -201,35 +203,38 @@ impl DownloadState {
         out
     }
 
-    /// The progress line keeps the bar first and drops trailing detail as the
-    /// terminal narrows.
-    fn progress_line(&self, w: usize) -> String {
+    /// Full-width bar on its own line, detail centred and dimmed underneath.
+    fn progress_rows(&self, w: usize) -> Vec<String> {
         let pct = if self.total_bytes > 0 {
-            self.completed_bytes as f64 / self.total_bytes as f64 * 100.0
+            (self.completed_bytes as f64 / self.total_bytes as f64 * 100.0).min(100.0)
         } else {
             0.0
         };
-        let elapsed = self.start.elapsed().as_secs_f64();
-        let pct_s = format!("{:>5.1}%", pct);
-        let sep = style::bold("\u{2022}");
-        let bytes = style::green(&self.dl_status());
-        let speed = style::color(&self.speed(elapsed), style::Color::Blue);
-        let eta = style::cyan(&format!("ETA {}", self.eta(elapsed)));
-        let inner = w.saturating_sub(5);
+        let content_w = w.saturating_sub(3);
+        let mut out = Vec::new();
 
-        let tiers = [
-            format!(" {} {} {} {} {} {} {}", pct_s, sep, bytes, sep, speed, sep, eta),
-            format!(" {} {} {} {} {}", pct_s, sep, bytes, sep, eta),
-            format!(" {} {} {}", pct_s, sep, bytes),
-            format!(" {}", pct_s),
-        ];
-        for details in tiers {
-            let used = draw::display_width(&details);
-            if used + 10 <= inner {
-                let bar = draw::progress_bar(pct, inner - used);
-                return draw::box_row_w(&format!("[{}]{}", bar, details), w);
-            }
+        if content_w >= 4 {
+            let bar = draw::progress_bar(pct, content_w - 2);
+            out.push(draw::box_row_w(&format!("[{bar}]"), w));
         }
-        draw::box_row_w(&format!("[{}] {}", draw::progress_bar(pct, 8), pct_s), w)
+
+        let elapsed = self.start.elapsed().as_secs_f64();
+        let pct_s = format!("{pct:.1}%");
+        let sep = "\u{2022}";
+        let tiers = [
+            format!("{pct_s} {sep} {} {sep} {} {sep} ETA {}", self.dl_status(), self.speed(elapsed), self.eta(elapsed)),
+            format!("{pct_s} {sep} {} {sep} ETA {}", self.dl_status(), self.eta(elapsed)),
+            format!("{pct_s} {sep} {}", self.dl_status()),
+            pct_s.clone(),
+        ];
+        let details = tiers
+            .iter()
+            .find(|t| draw::display_width(t) <= content_w)
+            .unwrap_or(&tiers[3]);
+        let dimmed = style::dim(details);
+        let width = draw::display_width(&dimmed);
+        let left = content_w.saturating_sub(width) / 2;
+        out.push(draw::box_row_w(&format!("{}{}", " ".repeat(left), dimmed), w));
+        out
     }
 }

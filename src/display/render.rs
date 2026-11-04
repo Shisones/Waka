@@ -67,12 +67,18 @@ impl DownloadState {
         let now = Instant::now();
         if now.duration_since(self.last_render).as_millis() < 50 { return; }
         self.last_render = now;
-        if std::io::stdout().is_terminal() {
-            for _ in 0..self.rendered { print!("\r\x1b[K\x1b[1A"); }
+        let tty = std::io::stdout().is_terminal();
+        if tty {
+            print!("{}", draw::clear_block(self.rendered));
         }
         self.rendered = 0;
         let out = self.build();
-        for line in &out { println!("{line}"); }
+        if tty {
+            for line in &out { print!("{line}\x1b[K\r\n"); }
+            print!("\x1b[J");
+        } else {
+            for line in &out { println!("{line}"); }
+        }
         self.rendered = out.len();
         let _ = std::io::stdout().flush();
     }
@@ -80,8 +86,7 @@ impl DownloadState {
     pub fn done(&mut self) {
         let r = self.rendered;
         if std::io::stdout().is_terminal() && r > 0 {
-            for _ in 0..r { print!("\r\x1b[K\x1b[1A"); }
-            print!("\r\x1b[K");
+            print!("{}\x1b[J", draw::clear_block(r));
         }
         self.rendered = 0;
         let _ = std::io::stdout().flush();

@@ -42,20 +42,20 @@ impl DbSyncState {
         if now.duration_since(self.last_render).as_millis() < 50 { return; }
         self.last_render = now;
         if !std::io::stdout().is_terminal() { return; }
-        for _ in 0..self.rendered { print!("\r\x1b[K\x1b[1A"); }
+        print!("{}", draw::clear_block(self.rendered));
         self.rendered = 0;
         let lines = self.live_lines();
         let cap = draw::term_rows().saturating_sub(1).max(1);
         let shown = lines.len().min(cap);
-        for line in lines.iter().take(shown) { println!("{line}"); }
+        for line in lines.iter().take(shown) { print!("{line}\x1b[K\r\n"); }
+        print!("\x1b[J");
         self.rendered = shown;
         let _ = std::io::stdout().flush();
     }
 
     pub fn done(&mut self) {
         if self.rendered > 0 && std::io::stdout().is_terminal() {
-            for _ in 0..self.rendered { print!("\r\x1b[K\x1b[1A"); }
-            print!("\r\x1b[K");
+            print!("{}\x1b[J", draw::clear_block(self.rendered));
             let _ = std::io::stdout().flush();
         }
         self.rendered = 0;

@@ -1,4 +1,4 @@
-use waka::display::draw::{box_bottom_w, box_row_w, box_top_w, display_width, progress_bar, strip_ansi, truncate};
+use waka::display::draw::{box_bottom_w, box_row_w, box_top_w, clear_block, display_width, progress_bar, strip_ansi, truncate};
 
 #[test]
 fn box_lines_never_exceed_width() {
@@ -7,7 +7,23 @@ fn box_lines_never_exceed_width() {
         assert!(display_width(&box_top_w("Download", w)) <= w, "top at {w}");
         assert!(display_width(&box_bottom_w(w)) <= w, "bottom at {w}");
         assert!(display_width(&box_row_w(long, w)) <= w, "row at {w}");
+        if w >= 3 {
+            assert_eq!(display_width(&box_row_w(long, w)), w, "row should fill {w}");
+        }
     }
+}
+
+#[test]
+fn clear_block_moves_up_before_clearing() {
+    let seq = clear_block(3);
+    assert_eq!(seq.matches("\x1b[1A").count(), 3);
+    assert_eq!(seq.matches("\x1b[2K").count(), 3);
+    assert!(seq.starts_with("\x1b[1A"), "must move up first, got {seq:?}");
+}
+
+#[test]
+fn clear_block_of_zero_draws_nothing() {
+    assert!(clear_block(0).is_empty());
 }
 
 #[test]
@@ -15,8 +31,7 @@ fn truncate_keeps_escape_sequences_whole() {
     let out = truncate("\x1b[1;32mabcdefghij\x1b[0m", 5);
     assert!(display_width(&out) <= 5);
     assert!(out.starts_with("\x1b[1;32m"));
-    assert!(out.contains("\x1b[0m"));
-    assert!(out.ends_with('\u{2026}'));
+    assert!(out.ends_with("\u{2026}\x1b[0m"), "ellipsis should stay coloured, got {out:?}");
     assert_eq!(strip_ansi(&out), "abcd\u{2026}");
 }
 

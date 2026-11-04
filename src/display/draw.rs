@@ -39,10 +39,23 @@ pub fn truncate(s: &str, max: usize) -> String {
         width += cw;
         out.push(c);
     }
+    out.push('\u{2026}');
     if styled {
         out.push_str("\x1b[0m");
     }
-    out.push('\u{2026}');
+    out
+}
+
+/// Move up over `lines` rows and clear each one.
+///
+/// The cursor must start on the row directly below the block. Moving before
+/// clearing is what erases the top row; the old order cleared the row being
+/// left, so the first line of every frame survived.
+pub fn clear_block(lines: usize) -> String {
+    let mut out = String::new();
+    for _ in 0..lines {
+        out.push_str("\x1b[1A\r\x1b[2K");
+    }
     out
 }
 

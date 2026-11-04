@@ -233,7 +233,7 @@ impl DownloadState {
             .iter()
             .find(|rest| draw::display_width(&pct_s) + draw::display_width(rest) <= content_w)
             .unwrap_or(&tiers[3]);
-        let line = format!("{pct_s}{}", style::dim(rest));
+        let line = format!("{pct_s}{}", style::black(rest));
         out.push(draw::box_row_w(&line, w));
         out
     }

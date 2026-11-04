@@ -12,7 +12,8 @@ A front-end for libalpm, inspired by nala.
 - NO_COLOR support (disables colours when env var is set or piped)
 - Non-TTY confirm returns false; --assume-yes / config option for automation
 - Cleans up ALPM lock file on Ctrl+C
-- Auto-answers ALPM questions (conflicts, providers, key import, corrupted packages)
+- Auto-answers ALPM questions (conflicts, providers, corrupted packages)
+- PGP key import asks for confirmation unless --assume-yes is set
 
 ## Installation
 

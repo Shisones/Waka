@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-pub fn callbacks(handle: &alpm::Alpm, title: &str) -> Arc<Mutex<render::DownloadState>> {
+pub fn callbacks(handle: &alpm::Alpm, title: &str, assume_yes: bool) -> Arc<Mutex<render::DownloadState>> {
     let shared = Arc::new(Mutex::new(render::DownloadState {
         rendered: 0, last_size: None, resize: Default::default(), plain_log: 0,
         title: style::bold(title), phase: false,
@@ -118,17 +118,51 @@ pub fn callbacks(handle: &alpm::Alpm, title: &str) -> Arc<Mutex<render::Download
         }
     });
 
-    handle.set_question_cb((), |q, _| {
+    let s = Arc::clone(&shared);
+    handle.set_question_cb(s, move |q, arc| {
         use alpm::Question;
-        match q.question() {
-            Question::InstallIgnorepkg(mut q) => q.set_install(true),
-            Question::Replace(q) => q.set_replace(true),
-            Question::Conflict(mut q) => q.set_remove(true),
-            Question::SelectProvider(mut q) => q.set_index(0),
-            Question::ImportKey(mut q) => q.set_import(true),
-            Question::Corrupted(mut q) => q.set_remove(true),
-            Question::RemovePkgs(mut q) => q.set_skip(false),
-        }
+        let note = match q.question() {
+            Question::InstallIgnorepkg(mut q) => {
+                q.set_install(true);
+                "auto-answer: installing ignored package"
+            }
+            Question::Replace(q) => {
+                q.set_replace(true);
+                "auto-answer: replacing package"
+            }
+            Question::Conflict(mut q) => {
+                q.set_remove(true);
+                "auto-answer: removing conflicting package"
+            }
+            Question::SelectProvider(mut q) => {
+                q.set_index(0);
+                "auto-answer: using the first provider"
+            }
+            Question::ImportKey(mut q) => {
+                let import = if assume_yes {
+                    true
+                } else {
+                    {
+                        let mut state = arc.lock().unwrap();
+                        state.done();
+                    }
+                    render::confirm(&style::bold("\n Import the required PGP key? [Y/n] "))
+                };
+                q.set_import(import);
+                if import { "imported PGP key" } else { "declined PGP key import" }
+            }
+            Question::Corrupted(mut q) => {
+                q.set_remove(true);
+                "auto-answer: deleting corrupted package"
+            }
+            Question::RemovePkgs(mut q) => {
+                q.set_skip(false);
+                "auto-answer: proceeding with removal"
+            }
+        };
+        let mut state = arc.lock().unwrap();
+        state.log.push(format!(" {}", style::dim(note)));
+        state.render();
     });
 
     shared

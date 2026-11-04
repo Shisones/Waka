@@ -234,7 +234,7 @@ pub fn run_install(packages: &[String], assume_yes: bool) -> Result<()> {
         }
         if !found { return Err(anyhow::anyhow!("package '{name}' disappeared")); }
     }
-    let shared = callbacks::callbacks(h, "Install");
+    let shared = callbacks::callbacks(h, "Install", assume_yes);
     let prep_err = match h.trans_prepare() {
         Ok(_) => None,
         Err(e) => Some((e.error().to_string(), detail_from_prep_err(e))),
@@ -287,7 +287,7 @@ pub fn run_remove(packages: &[String], assume_yes: bool) -> Result<()> {
     }
     if targets.is_empty() { return Err(anyhow::anyhow!("no packages to remove")); }
 
-    let shared = callbacks::callbacks(h, "Remove");
+    let shared = callbacks::callbacks(h, "Remove", assume_yes);
     let flags = alpm::TransFlag::CASCADE | alpm::TransFlag::RECURSE | alpm::TransFlag::NO_SAVE;
     transaction::trans_init(h, flags)?;
     for name in &targets {
@@ -381,7 +381,7 @@ fn run_autoremove_impl(assume_yes: bool) -> Result<()> {
         return Ok(());
     }
 
-    let shared = callbacks::callbacks(h, "Autoremove");
+    let shared = callbacks::callbacks(h, "Autoremove", assume_yes);
     shared.lock().unwrap().render();
 
     transaction::trans_init(h, alpm::TransFlag::CASCADE | alpm::TransFlag::RECURSE)?;
@@ -640,7 +640,7 @@ pub fn run_upgrade(assume_yes: bool, autoremove: bool) -> Result<()> {
     if add_count == 0 { transaction::end_trans(h); println!("{} All packages are up to date", style::green("\u{2713}")); return Ok(()); }
 
     let title = format!("Upgrade ({} packages)", add_count);
-    let shared = callbacks::callbacks(h, &title);
+    let shared = callbacks::callbacks(h, &title, assume_yes);
     shared.lock().unwrap().render();
 
     let prep_err = match h.trans_prepare() {

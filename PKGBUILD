@@ -11,7 +11,7 @@ makedepends=('cargo')
 depends=('glibc' 'gcc-libs' 'pacman')
 optdepends=('curl: for waka fetch')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('bb440a195dd6e50276d80134cddfa9239a0ee2e7c2b881ad0d07cb40105e225d')
+sha256sums=('8ba462e1f231aa945da1808f6db776d3694ca811523032d8eb0ae75ea4fa38ad')
 
 prepare() {
     export RUSTUP_TOOLCHAIN=stable

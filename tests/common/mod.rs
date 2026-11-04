@@ -13,6 +13,7 @@ pub fn download_state(completed_bytes: i64, total_bytes: i64) -> DownloadState {
         total_bytes,
         completed_bytes,
         total_files: 0,
+        total_pkgs: 0,
         completed_files: 0,
         currently_downloading: None,
         completed_downloads: Vec::new(),

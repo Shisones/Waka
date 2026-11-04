@@ -129,3 +129,14 @@ fn progress_bar_ends_with_percentage_and_details_split_left_right() {
     let details = narrow.iter().find(|l| l.contains("ETA")).expect("narrow detail");
     assert!(!details.contains("/s"), "speed should be dropped: {details:?}");
 }
+
+#[test]
+fn package_counter_uses_the_transaction_total() {
+    let mut s = download_state(0, 1024);
+    s.total_files = 5;
+    s.total_pkgs = 57;
+    s.completed_files = 3;
+    let lines = s.build_at(120, 24);
+    let details = lines.iter().find(|l| l.contains("ETA")).expect("detail row");
+    assert!(details.contains("3/57 Packages"), "{details:?}");
+}

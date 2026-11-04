@@ -8,7 +8,7 @@ pub fn callbacks(handle: &alpm::Alpm, title: &str) -> Arc<Mutex<render::Download
     let shared = Arc::new(Mutex::new(render::DownloadState {
         rendered: 0, last_size: None, resize: Default::default(), plain_log: 0,
         title: style::bold(title), phase: false,
-        total_bytes: 0, completed_bytes: 0, total_files: 0, completed_files: 0,
+        total_bytes: 0, completed_bytes: 0, total_files: 0, total_pkgs: 0, completed_files: 0,
         currently_downloading: None,
         completed_downloads: Vec::new(), file_to_pkg: HashMap::new(),
         start: Instant::now(), last_render: Instant::now(),

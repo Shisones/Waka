@@ -258,6 +258,7 @@ pub fn run_install(packages: &[String], assume_yes: bool) -> Result<()> {
 
     {
         let mut state = shared.lock().unwrap();
+        state.total_pkgs = add.len();
         for pkg in add.iter() {
             state.total_bytes += pkg.download_size();
         }
@@ -662,6 +663,7 @@ pub fn run_upgrade(assume_yes: bool, autoremove: bool) -> Result<()> {
 
     {
         let mut state = shared.lock().unwrap();
+        state.total_pkgs = add.len();
         for pkg in add.iter() {
             state.total_bytes += pkg.download_size();
         }

@@ -41,6 +41,7 @@ pub struct DownloadState {
     pub total_bytes: i64,
     pub completed_bytes: i64,
     pub total_files: usize,
+    pub total_pkgs: usize,
     pub completed_files: usize,
     pub currently_downloading: Option<String>,
     pub completed_downloads: Vec<String>,
@@ -225,7 +226,11 @@ impl DownloadState {
 
         let elapsed = self.start.elapsed().as_secs_f64();
         let eta = style::cyan(&format!("ETA {}", self.eta(elapsed)));
-        let packages = style::green(&format!("{}/{} Packages", self.completed_files, self.total_files));
+        let packages = style::green(&format!(
+            "{}/{} Packages",
+            self.completed_files.min(self.total_pkgs.max(self.total_files)),
+            self.total_pkgs.max(self.total_files)
+        ));
         let size = style::green(&self.dl_status());
         let speed = style::cyan(&self.speed(elapsed));
 

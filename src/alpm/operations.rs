@@ -348,12 +348,12 @@ fn run_autoremove_impl(assume_yes: bool) -> Result<()> {
     let mut handle = AlpmHandle::new()?;
     let h = &mut handle.handle;
 
-    let orphans: Vec<(String, String)> = {
+    let orphans: Vec<(String, String, i64)> = {
         let local = h.localdb();
         local.pkgs().iter()
             .filter(|p| p.reason() == alpm::PackageReason::Depend)
             .filter(|p| p.required_by().is_empty())
-            .map(|p| (p.name().to_string(), p.version().to_string()))
+            .map(|p| (p.name().to_string(), p.version().to_string(), p.isize()))
             .collect()
     };
 
@@ -363,9 +363,11 @@ fn run_autoremove_impl(assume_yes: bool) -> Result<()> {
     }
 
     eprintln!(" {} {} {}", style::yellow("warn"), orphans.len(), table::plural("orphaned package", orphans.len()));
-    for (name, ver) in &orphans {
+    for (name, ver, _) in &orphans {
         println!("  {} ({})", style::red(name), style::dim(ver));
     }
+    let freed: i64 = orphans.iter().map(|(_, _, size)| *size).sum();
+    println!("  {} will be freed", fmt::format_size(freed));
 
     eprintln!(" {} {} This will remove orphaned packages. This action can delete critical dependencies if they are no longer required.",
         style::red("WARNING"), style::bold("PROCEED WITH CAUTION"));
@@ -379,7 +381,7 @@ fn run_autoremove_impl(assume_yes: bool) -> Result<()> {
     shared.lock().unwrap().render();
 
     transaction::trans_init(h, alpm::TransFlag::CASCADE | alpm::TransFlag::RECURSE)?;
-    for (name, _) in &orphans {
+    for (name, _, _) in &orphans {
         let pkg = h.localdb().pkg(name.as_str())
             .map_err(|_| anyhow::anyhow!("package '{name}' not found"))?;
         h.trans_remove_pkg(pkg)
@@ -409,18 +411,28 @@ pub fn run_autoremove(assume_yes: bool) -> Result<()> {
     run_autoremove_impl(assume_yes)
 }
 
+pub fn should_remove(fname: &str, all: bool, installed: &HashSet<String>) -> bool {
+    if fname.ends_with(".db") || fname.ends_with(".db.sig") {
+        return all;
+    }
+    if fname.ends_with(".sig") {
+        return false;
+    }
+    let base = match fname.split(".pkg.tar.").next() {
+        Some(base) => base,
+        None => return false,
+    };
+    let without_arch = base.rsplit_once('-').map(|(p, _)| p).unwrap_or(base);
+    !installed.contains(without_arch)
+}
+
 pub fn run_clean(all: bool, assume_yes: bool) -> Result<()> {
-    require_root()?;
     use std::fs;
 
+    require_root()?;
     let cache = constants::cache_dir();
     if !cache.exists() {
         eprintln!(" {} cache directory not found", style::yellow("warn"));
-        return Ok(());
-    }
-
-    if !assume_yes && !render::confirm(&style::bold("\n Clear package cache? [Y/n] ")) {
-        eprintln!(" {}", style::red("Aborted."));
         return Ok(());
     }
 
@@ -430,36 +442,42 @@ pub fn run_clean(all: bool, assume_yes: bool) -> Result<()> {
         .map(|p| format!("{}-{}", p.name(), p.version()))
         .collect();
 
-    let mut removed = 0u32;
+    let mut doomed: Vec<(std::path::PathBuf, i64)> = Vec::new();
     for entry in fs::read_dir(&cache)? {
         let entry = entry?;
         let path = entry.path();
         if !path.is_file() { continue; }
         let fname = path.file_name().unwrap().to_string_lossy().to_string();
-
-        if fname.ends_with(".db") || fname.ends_with(".db.sig") {
-            if all {
-                fs::remove_file(&path)?;
-                removed += 1;
-            }
-            continue;
-        }
-        if fname.ends_with(".sig") { continue; }
-
-        if let Some(base) = fname.split(".pkg.tar.").next() {
-            let without_arch = base.rsplit_once('-').map(|(p, _)| p).unwrap_or(base);
-            if !installed.contains(without_arch) {
-                fs::remove_file(&path)?;
-                removed += 1;
-            }
+        if should_remove(&fname, all, &installed) {
+            let len = entry.metadata().map(|m| m.len() as i64).unwrap_or(0);
+            doomed.push((path, len));
         }
     }
 
-    if removed > 0 {
-        println!(" {} removed {} {} from cache", style::green("\u{2713}"), removed, table::plural("file", removed as usize));
-    } else {
+    if doomed.is_empty() {
         println!(" {} cache is already clean", style::green("\u{2713}"));
+        return Ok(());
     }
+
+    let freed: i64 = doomed.iter().map(|(_, len)| *len).sum();
+    println!(" {} {} {} \u{00b7} {} will be freed",
+        style::cyan("info"), doomed.len(), table::plural("file", doomed.len()), fmt::format_size(freed));
+    println!();
+
+    if !assume_yes && !render::confirm(&style::bold("\n Clear package cache? [Y/n] ")) {
+        eprintln!(" {}", style::red("Aborted."));
+        return Ok(());
+    }
+
+    let mut removed = 0u32;
+    for (path, _) in &doomed {
+        match fs::remove_file(path) {
+            Ok(_) => removed += 1,
+            Err(e) => eprintln!("  {} {}: {}", style::yellow("warn"), path.display(), e),
+        }
+    }
+
+    println!(" {} removed {} {} from cache", style::green("\u{2713}"), removed, table::plural("file", removed as usize));
     Ok(())
 }
 

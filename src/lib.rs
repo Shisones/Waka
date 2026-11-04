@@ -33,7 +33,7 @@ pub fn run(cli: cli::Cli) -> anyhow::Result<()> {
         }
         cli::Command::Search { terms } => {
             let handle = alpm::handle::AlpmHandle::new()?;
-            pkg::search::search_packages(&handle, &terms.join(" "))
+            pkg::search::search_packages(&handle, &terms)
         }
         cli::Command::List { installed, upgradable, packages } => {
             let handle = alpm::handle::AlpmHandle::new()?;

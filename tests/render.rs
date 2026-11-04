@@ -2,6 +2,7 @@ mod common;
 
 use common::download_state;
 use waka::display::draw::display_width;
+use waka::display::render::capped_bytes;
 use waka::display::render::pkg_name_from_filename;
 
 fn assert_fits(state: &waka::display::render::DownloadState, w: usize, rows: usize) {
@@ -147,4 +148,13 @@ fn confirmation_requires_a_tty_only_when_it_will_ask() {
     assert!(confirmation_unavailable(false, false));
     assert!(!confirmation_unavailable(false, true));
     assert!(!confirmation_unavailable(true, false));
+}
+
+#[test]
+fn byte_counts_are_capped_at_the_transaction_size() {
+    assert_eq!(capped_bytes(50, Some(100)), 50);
+    assert_eq!(capped_bytes(150, Some(100)), 100);
+    assert_eq!(capped_bytes(150, None), 150);
+    assert_eq!(capped_bytes(-5, Some(100)), 0);
+    assert_eq!(capped_bytes(50, Some(0)), 0);
 }

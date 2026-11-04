@@ -43,6 +43,18 @@ pub fn require_confirmation_possible(assume_yes: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Bytes to count for one file, capped at the size the transaction reserved
+/// for it. libalpm reports per-transfer counters, and for resumed files the
+/// transferred total can exceed the remaining size it charged to the
+/// transaction.
+pub fn capped_bytes(raw: i64, cap: Option<i64>) -> i64 {
+    let raw = raw.max(0);
+    match cap {
+        Some(cap) => raw.min(cap.max(0)),
+        None => raw,
+    }
+}
+
 #[derive(Debug)]
 pub struct DownloadState {
     pub rendered: usize,
@@ -63,6 +75,7 @@ pub struct DownloadState {
     pub last_render: Instant,
     pub log: Vec<String>,
     pub per_file: HashMap<String, FileProgress>,
+    pub pkg_sizes: HashMap<String, i64>,
 }
 
 impl DownloadState {

@@ -22,5 +22,6 @@ pub fn download_state(completed_bytes: i64, total_bytes: i64) -> DownloadState {
         last_render: Instant::now(),
         log: Vec::new(),
         per_file: HashMap::new(),
+        pkg_sizes: HashMap::new(),
     }
 }

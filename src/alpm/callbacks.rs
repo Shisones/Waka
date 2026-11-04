@@ -12,7 +12,7 @@ pub fn callbacks(handle: &alpm::Alpm, title: &str, assume_yes: bool) -> Arc<Mute
         currently_downloading: None,
         completed_downloads: Vec::new(), file_to_pkg: HashMap::new(),
         start: Instant::now(), last_render: Instant::now(),
-        per_file: HashMap::new(), log: Vec::new(),
+        per_file: HashMap::new(), pkg_sizes: HashMap::new(), log: Vec::new(),
     }));
 
     let s = Arc::clone(&shared);
@@ -21,6 +21,9 @@ pub fn callbacks(handle: &alpm::Alpm, title: &str, assume_yes: bool) -> Arc<Mute
         let mut state = arc.lock().unwrap();
         match event.event() {
             DownloadEvent::Init(_) => {
+                if fname.ends_with(".sig") {
+                    return;
+                }
                 state.per_file.entry(fname.to_string()).or_insert(render::FileProgress { downloaded: 0, total: 0 });
                 state.total_files += 1;
                 let name = render::pkg_name_from_filename(fname);
@@ -31,11 +34,16 @@ pub fn callbacks(handle: &alpm::Alpm, title: &str, assume_yes: bool) -> Arc<Mute
                 state.render();
             }
             DownloadEvent::Progress(prog) => {
+                if fname.ends_with(".sig") {
+                    return;
+                }
+                let cap = state.file_to_pkg.get(fname).and_then(|pkg| state.pkg_sizes.get(pkg)).copied();
+                let target = render::capped_bytes(prog.downloaded, cap);
                 let delta = {
                     let entry = state.per_file.entry(fname.to_string()).or_insert(render::FileProgress { downloaded: 0, total: 0 });
                     if entry.total == 0 && prog.total > 0 { entry.total = prog.total; }
-                    let d = prog.downloaded - entry.downloaded;
-                    if d > 0 { entry.downloaded = prog.downloaded; }
+                    let d = target - entry.downloaded;
+                    if d > 0 { entry.downloaded = target; }
                     d
                 };
                 if delta > 0 { state.completed_bytes += delta; }
@@ -43,17 +51,20 @@ pub fn callbacks(handle: &alpm::Alpm, title: &str, assume_yes: bool) -> Arc<Mute
                 state.render();
             }
             DownloadEvent::Completed(comp) => {
-                if comp.total > 0 {
-                    let remaining = {
-                        let entry = state.per_file.entry(fname.to_string()).or_insert(render::FileProgress { downloaded: 0, total: 0 });
-                        if entry.total == 0 { entry.total = comp.total; }
-                        let r = comp.total - entry.downloaded;
-                        if r > 0 { entry.downloaded = comp.total; }
-                        r
-                    };
-                    if remaining > 0 {
-                        state.completed_bytes += remaining;
-                    }
+                if fname.ends_with(".sig") {
+                    return;
+                }
+                let cap = state.file_to_pkg.get(fname).and_then(|pkg| state.pkg_sizes.get(pkg)).copied();
+                let target = render::capped_bytes(comp.total, cap);
+                let remaining = {
+                    let entry = state.per_file.entry(fname.to_string()).or_insert(render::FileProgress { downloaded: 0, total: 0 });
+                    if entry.total == 0 { entry.total = cap.unwrap_or(comp.total); }
+                    let r = target - entry.downloaded;
+                    if r > 0 { entry.downloaded = target; }
+                    r
+                };
+                if remaining > 0 {
+                    state.completed_bytes += remaining;
                 }
                 state.completed_files += 1;
                 if let Some(name) = state.file_to_pkg.remove(fname) {

@@ -140,3 +140,11 @@ fn package_counter_uses_the_transaction_total() {
     let details = lines.iter().find(|l| l.contains("ETA")).expect("detail row");
     assert!(details.contains("3/57 Packages"), "{details:?}");
 }
+
+#[test]
+fn confirmation_requires_a_tty_only_when_it_will_ask() {
+    use waka::display::render::confirmation_unavailable;
+    assert!(confirmation_unavailable(false, false));
+    assert!(!confirmation_unavailable(false, true));
+    assert!(!confirmation_unavailable(true, false));
+}

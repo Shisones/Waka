@@ -210,6 +210,7 @@ pub fn run_install(packages: &[String], assume_yes: bool) -> Result<()> {
     require_root()?;
     let config = Config::load()?;
     let assume_yes = assume_yes || config.waka.assume_yes;
+    render::require_confirmation_possible(assume_yes)?;
     let mut handle = AlpmHandle::new()?;
 
     let mut targets: Vec<String> = Vec::new();
@@ -274,6 +275,7 @@ pub fn run_remove(packages: &[String], assume_yes: bool) -> Result<()> {
     require_root()?;
     let config = Config::load()?;
     let assume_yes = assume_yes || config.waka.assume_yes;
+    render::require_confirmation_possible(assume_yes)?;
     let mut handle = AlpmHandle::new()?;
     let h = &mut handle.handle;
     let mut targets: Vec<String> = Vec::new();
@@ -346,6 +348,7 @@ fn run_autoremove_impl(assume_yes: bool) -> Result<()> {
     require_root()?;
     let config = Config::load()?;
     let assume_yes = assume_yes || config.waka.assume_yes;
+    render::require_confirmation_possible(assume_yes)?;
     let mut handle = AlpmHandle::new()?;
     let h = &mut handle.handle;
 
@@ -431,6 +434,7 @@ pub fn run_clean(all: bool, assume_yes: bool) -> Result<()> {
     use std::fs;
 
     require_root()?;
+    render::require_confirmation_possible(assume_yes)?;
     let cache = constants::cache_dir();
     if !cache.exists() {
         eprintln!(" {} cache directory not found", style::yellow("warn"));
@@ -596,6 +600,7 @@ pub fn run_upgrade(assume_yes: bool, autoremove: bool) -> Result<()> {
     require_root()?;
     let config = Config::load()?;
     let assume_yes = assume_yes || config.waka.assume_yes;
+    render::require_confirmation_possible(assume_yes)?;
     let mut handle = AlpmHandle::new()?;
     let h = &mut handle.handle;
 

@@ -30,6 +30,19 @@ pub fn confirm(prompt: &str) -> bool {
     line.is_empty() || line.eq_ignore_ascii_case("y") || line.eq_ignore_ascii_case("yes")
 }
 
+/// True when a command would have to ask and stdin cannot answer.
+pub fn confirmation_unavailable(assume_yes: bool, stdin_is_tty: bool) -> bool {
+    !assume_yes && !stdin_is_tty
+}
+
+/// Fail before doing any work instead of silently aborting with exit 0.
+pub fn require_confirmation_possible(assume_yes: bool) -> anyhow::Result<()> {
+    if confirmation_unavailable(assume_yes, std::io::stdin().is_terminal()) {
+        return Err(anyhow::anyhow!("cannot prompt without a TTY; pass -y"));
+    }
+    Ok(())
+}
+
 #[derive(Debug)]
 pub struct DownloadState {
     pub rendered: usize,

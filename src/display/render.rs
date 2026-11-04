@@ -211,7 +211,7 @@ impl DownloadState {
         } else {
             0.0
         };
-        let content_w = w.saturating_sub(3);
+        let content_w = w.saturating_sub(4);
         let pct_s = format!("{pct:.1}%");
         let pct_w = draw::display_width(&pct_s);
         let mut out = Vec::new();

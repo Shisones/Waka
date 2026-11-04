@@ -93,14 +93,14 @@ pub fn box_row(content: &str) -> String {
 }
 
 pub fn box_row_w(content: &str, w: usize) -> String {
-    if w < 3 {
+    if w < 4 {
         return truncate(content, w);
     }
-    let inner = w - 2;
-    let content_w = inner - 1;
+    // One space between each border and the content.
+    let content_w = w - 4;
     let content = truncate(content, content_w);
     let pad = content_w.saturating_sub(display_width(&content));
-    format!("│ {content}{}│", " ".repeat(pad))
+    format!("│ {content}{} │", " ".repeat(pad))
 }
 
 pub fn strip_ansi(s: &str) -> String {

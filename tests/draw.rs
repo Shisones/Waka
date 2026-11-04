@@ -14,6 +14,13 @@ fn box_lines_never_exceed_width() {
 }
 
 #[test]
+fn box_rows_pad_both_sides() {
+    assert_eq!(box_row_w("x", 10), "\u{2502} x      \u{2502}");
+    assert_eq!(display_width(&box_row_w("x", 10)), 10);
+    assert!(box_row_w("abcdefghijklmnop", 10).ends_with("\u{2026} \u{2502}"));
+}
+
+#[test]
 fn clear_block_moves_up_before_clearing() {
     let seq = clear_block(3);
     assert_eq!(seq.matches("\x1b[1A").count(), 3);

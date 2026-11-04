@@ -90,6 +90,11 @@ pub fn write_summary_footer(items: &[(&str, &str)]) {
     }
 }
 
+pub fn package_cell(name: &str, dependency: bool) -> String {
+    let styled = crate::display::style::green(name);
+    if dependency { format!(" {styled}") } else { styled }
+}
+
 pub fn plural(word: &str, count: usize) -> String {
     if count == 1 { word.to_string() } else { format!("{}s", word) }
 }

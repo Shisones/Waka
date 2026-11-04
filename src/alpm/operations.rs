@@ -6,6 +6,22 @@ use anyhow::Result;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
+pub fn root_hint(args: &[String]) -> String {
+    if args.is_empty() {
+        "this command needs root; run it with sudo".to_string()
+    } else {
+        format!("this command needs root; run `sudo waka {}`", args.join(" "))
+    }
+}
+
+pub fn require_root() -> Result<()> {
+    if unsafe { libc::geteuid() } == 0 {
+        return Ok(());
+    }
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    Err(anyhow::anyhow!("{}", root_hint(&args)))
+}
+
 fn detail_from_prep_err(e: alpm::PrepareError<'_>) -> Option<String> {
     match e.data() {
         Some(alpm::PrepareData::UnsatisfiedDeps(deps)) => Some(deps.iter().map(|d| format!("{} (needs {})", d.target(), d.depend().name())).collect::<Vec<_>>().join(", ")),
@@ -36,6 +52,7 @@ fn commit_epilogue(
 }
 
 pub fn run_update() -> Result<()> {
+    require_root()?;
     let mut handle = AlpmHandle::new()?;
     let h = &mut handle.handle;
 
@@ -98,14 +115,15 @@ fn show_upgrade_summary(add: &alpm::AlpmList<&alpm::Package>, rm: &alpm::AlpmLis
     let mut net_upgrade: i64 = 0;
     let mut dep_count = 0;
     for pkg in add.iter() {
-        if pkg.reason() == alpm::PackageReason::Depend {
+        let dependency = pkg.reason() == alpm::PackageReason::Depend;
+        if dependency {
             dep_count += 1;
         }
         let old = local.pkg(pkg.name()).ok();
         let old_ver = old.map(|o| o.version().to_string()).unwrap_or_default();
         let old_size = old.map(|o| o.isize()).unwrap_or(0);
         let net_change = pkg.isize() - old_size;
-        table::write_summary_row(&style::green(pkg.name()), &old_ver, pkg.version(), &fmt::format_size(net_change), &fmt::format_size(pkg.download_size()));
+        table::write_summary_row(&table::package_cell(pkg.name(), dependency), &old_ver, pkg.version(), &fmt::format_size(net_change), &fmt::format_size(pkg.download_size()));
         total_dl += pkg.download_size();
         total_isize += pkg.isize();
         net_upgrade += net_change;
@@ -139,7 +157,7 @@ fn show_install_summary(add: &alpm::AlpmList<&alpm::Package>, rm: &alpm::AlpmLis
     explicit_pkgs.sort_by(|a, b| a.name().cmp(b.name()));
 
     for pkg in &explicit_pkgs {
-        table::write_summary_row(&style::green(pkg.name()), "", pkg.version(), &fmt::format_size(pkg.isize()), &fmt::format_size(pkg.download_size()));
+        table::write_summary_row(&table::package_cell(pkg.name(), false), "", pkg.version(), &fmt::format_size(pkg.isize()), &fmt::format_size(pkg.download_size()));
         total_dl += pkg.download_size();
         total_isize += pkg.isize();
 
@@ -156,7 +174,7 @@ fn show_install_summary(add: &alpm::AlpmList<&alpm::Package>, rm: &alpm::AlpmLis
         for dn in deps {
             dep_count += 1;
             if let Some(dp) = add.iter().find(|p| p.name() == dn) {
-                table::write_summary_row(&format!(" {}", style::green(dn)), "", dp.version(), &fmt::format_size(dp.isize()), &fmt::format_size(dp.download_size()));
+                table::write_summary_row(&table::package_cell(dn, true), "", dp.version(), &fmt::format_size(dp.isize()), &fmt::format_size(dp.download_size()));
                 total_dl += dp.download_size();
                 total_isize += dp.isize();
             }
@@ -189,6 +207,7 @@ fn show_install_summary(add: &alpm::AlpmList<&alpm::Package>, rm: &alpm::AlpmLis
 
 pub fn run_install(packages: &[String], assume_yes: bool) -> Result<()> {
     if packages.is_empty() { return Err(anyhow::anyhow!("no packages specified")); }
+    require_root()?;
     let config = Config::load()?;
     let assume_yes = assume_yes || config.waka.assume_yes;
     let mut handle = AlpmHandle::new()?;
@@ -251,6 +270,7 @@ pub fn run_install(packages: &[String], assume_yes: bool) -> Result<()> {
 
 pub fn run_remove(packages: &[String], assume_yes: bool) -> Result<()> {
     if packages.is_empty() { return Err(anyhow::anyhow!("no packages specified")); }
+    require_root()?;
     let config = Config::load()?;
     let assume_yes = assume_yes || config.waka.assume_yes;
     let mut handle = AlpmHandle::new()?;
@@ -301,7 +321,6 @@ pub fn run_remove(packages: &[String], assume_yes: bool) -> Result<()> {
         dep_count, table::plural("package", dep_count));
     println!();
     table::write_summary_footer(&[
-        ("Total Download Size", &fmt::format_size(0)),
         ("Total Removed Size", &fmt::format_size(total_freed)),
         ("Net Upgrade Size", &fmt::format_size(-total_freed)),
     ]);
@@ -323,6 +342,7 @@ pub fn run_remove(packages: &[String], assume_yes: bool) -> Result<()> {
 }
 
 fn run_autoremove_impl(assume_yes: bool) -> Result<()> {
+    require_root()?;
     let config = Config::load()?;
     let assume_yes = assume_yes || config.waka.assume_yes;
     let mut handle = AlpmHandle::new()?;
@@ -390,6 +410,7 @@ pub fn run_autoremove(assume_yes: bool) -> Result<()> {
 }
 
 pub fn run_clean(all: bool, assume_yes: bool) -> Result<()> {
+    require_root()?;
     use std::fs;
 
     let cache = constants::cache_dir();
@@ -553,6 +574,7 @@ pub fn run_fetch() -> Result<()> {
 }
 
 pub fn run_upgrade(assume_yes: bool, autoremove: bool) -> Result<()> {
+    require_root()?;
     let config = Config::load()?;
     let assume_yes = assume_yes || config.waka.assume_yes;
     let mut handle = AlpmHandle::new()?;
@@ -635,4 +657,23 @@ pub fn run_upgrade(assume_yes: bool, autoremove: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::root_hint;
+
+    #[test]
+    fn root_hint_names_the_command() {
+        let args = vec!["install".to_string(), "firefox".to_string()];
+        assert_eq!(
+            root_hint(&args),
+            "this command needs root; run `sudo waka install firefox`"
+        );
+    }
+
+    #[test]
+    fn root_hint_without_args_still_points_at_sudo() {
+        assert!(root_hint(&[]).contains("sudo"));
+    }
 }

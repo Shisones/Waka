@@ -7,6 +7,7 @@ pub fn download_state(completed_bytes: i64, total_bytes: i64) -> DownloadState {
         rendered: 0,
         last_size: None,
         resize: Default::default(),
+        plain_log: 0,
         title: String::new(),
         phase: false,
         total_bytes,

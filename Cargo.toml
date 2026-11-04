@@ -16,6 +16,7 @@ toml = "0.8"
 chrono = "0.4"
 termsize = "0.1"
 ctrlc = "3"
+libc = "0.2"
 unicode-width = "0.2"
 tempfile = "3"
 

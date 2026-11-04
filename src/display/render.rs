@@ -35,6 +35,7 @@ pub struct DownloadState {
     pub rendered: usize,
     pub last_size: Option<(usize, usize)>,
     pub resize: crate::display::resize::Resize,
+    pub plain_log: usize,
     pub title: String,
     pub phase: bool,
     pub total_bytes: i64,
@@ -67,6 +68,13 @@ impl DownloadState {
 
     pub fn render(&mut self) {
         let now = Instant::now();
+        if !std::io::stdout().is_terminal() {
+            for entry in self.pending_log() {
+                println!(" {entry}");
+            }
+            self.plain_log = self.log.len();
+            return;
+        }
         if std::io::stdout().is_terminal() {
             let size = (draw::term_width(), draw::term_rows());
             if self.last_size != Some(size) {
@@ -101,6 +109,12 @@ impl DownloadState {
         }
         self.rendered = out.len();
         let _ = std::io::stdout().flush();
+    }
+
+    /// Log lines a piped run has not printed yet.
+    pub fn pending_log(&self) -> &[String] {
+        let start = self.plain_log.min(self.log.len());
+        &self.log[start..]
     }
 
     pub fn done(&mut self) {
@@ -164,7 +178,8 @@ impl DownloadState {
                 body.push(draw::box_row_w(&format!("{} {}", style::green("Completed:"), name), w));
             }
             if let Some(fname) = &self.currently_downloading {
-                body.push(draw::box_row_w(&format!("{} {}", style::cyan("Downloading:"), fname), w));
+                let name = self.file_to_pkg.get(fname).map(String::as_str).unwrap_or(fname.as_str());
+                body.push(draw::box_row_w(&format!("{} {}", style::cyan("Downloading:"), name), w));
             } else if self.completed_downloads.is_empty() {
                 body.push(draw::box_row_w(&style::cyan("Starting Downloads..."), w));
             }
@@ -186,8 +201,8 @@ impl DownloadState {
         out
     }
 
-    /// The progress line loses detail as the terminal narrows instead of
-    /// spilling past the box.
+    /// The progress line keeps the bar first and drops trailing detail as the
+    /// terminal narrows.
     fn progress_line(&self, w: usize) -> String {
         let pct = if self.total_bytes > 0 {
             self.completed_bytes as f64 / self.total_bytes as f64 * 100.0
@@ -195,30 +210,26 @@ impl DownloadState {
             0.0
         };
         let elapsed = self.start.elapsed().as_secs_f64();
-        let pct_s = format!("{:>6.1}%", pct);
+        let pct_s = format!("{:>5.1}%", pct);
         let sep = style::bold("\u{2022}");
         let bytes = style::green(&self.dl_status());
         let speed = style::color(&self.speed(elapsed), style::Color::Blue);
-        let inner = w.saturating_sub(4);
+        let eta = style::cyan(&format!("ETA {}", self.eta(elapsed)));
+        let inner = w.saturating_sub(5);
 
         let tiers = [
-            (
-                format!("{} {} [", style::cyan("Time Remaining:"), self.eta(elapsed)),
-                format!("] {} {} {} {} {}", pct_s, sep, bytes, sep, speed),
-            ),
-            (
-                format!("{} {} [", style::cyan("ETA:"), self.eta(elapsed)),
-                format!("] {} {}", pct_s, bytes),
-            ),
-            ("[".to_string(), format!("] {}", pct_s)),
+            format!(" {} {} {} {} {} {} {}", pct_s, sep, bytes, sep, speed, sep, eta),
+            format!(" {} {} {} {} {}", pct_s, sep, bytes, sep, eta),
+            format!(" {} {} {}", pct_s, sep, bytes),
+            format!(" {}", pct_s),
         ];
-        for (prefix, suffix) in tiers {
-            let used = draw::display_width(&prefix) + draw::display_width(&suffix);
-            if used + 6 <= inner {
+        for details in tiers {
+            let used = draw::display_width(&details);
+            if used + 10 <= inner {
                 let bar = draw::progress_bar(pct, inner - used);
-                return draw::box_row_w(&format!("{prefix}{bar}{suffix}"), w);
+                return draw::box_row_w(&format!("[{}]{}", bar, details), w);
             }
         }
-        draw::box_row_w(&pct_s, w)
+        draw::box_row_w(&format!("[{}] {}", draw::progress_bar(pct, 8), pct_s), w)
     }
 }

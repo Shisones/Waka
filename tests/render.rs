@@ -81,3 +81,40 @@ fn dl_status_uses_bytes_precision() {
     let s = download_state(500, 1000);
     assert_eq!(s.dl_status(), "500/1000 B");
 }
+#[test]
+fn pending_log_reports_unprinted_entries() {
+    let mut s = download_state(0, 0);
+    s.log.push("Resolving dependencies".to_string());
+    assert_eq!(s.pending_log(), ["Resolving dependencies"]);
+    s.plain_log = 1;
+    assert!(s.pending_log().is_empty());
+}
+
+#[test]
+fn current_download_uses_the_package_name() {
+    let mut s = download_state(0, 1024);
+    s.total_files = 1;
+    s.currently_downloading = Some("firefox-136.0-1-x86_64.pkg.tar.zst".to_string());
+    s.file_to_pkg.insert(
+        "firefox-136.0-1-x86_64.pkg.tar.zst".to_string(),
+        "firefox".to_string(),
+    );
+    let lines = s.build_at(80, 24);
+    let line = lines.iter().find(|l| l.contains("Downloading:")).expect("download row");
+    assert!(line.contains("firefox"), "{line:?}");
+    assert!(!line.contains(".pkg.tar"), "{line:?}");
+}
+
+#[test]
+fn progress_line_is_bar_first_and_drops_eta_when_narrow() {
+    let mut s = download_state(512, 2048);
+    s.total_files = 1;
+    let wide = s.build_at(120, 24);
+    let line = wide.iter().find(|l| l.contains('%')).expect("wide progress");
+    assert!(line.contains('['), "{line:?}");
+    assert!(line.contains("ETA"), "{line:?}");
+
+    let narrow = s.build_at(30, 24);
+    let line = narrow.iter().find(|l| l.contains('%')).expect("narrow progress");
+    assert!(!line.contains("ETA"), "{line:?}");
+}

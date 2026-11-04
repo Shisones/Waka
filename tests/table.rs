@@ -25,3 +25,9 @@ fn pad_does_not_widen_content() {
     assert_eq!(display_width(&pad("abcdef", 3, false)), 3);
     assert_eq!(display_width(&pad("ab", 5, false)), 5);
 }
+
+#[test]
+fn dependency_cells_are_indented() {
+    assert_eq!(waka::display::table::package_cell("libfoo", true), " libfoo");
+    assert_eq!(waka::display::table::package_cell("firefox", false), "firefox");
+}

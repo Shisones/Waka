@@ -4,6 +4,7 @@ pub mod config;
 pub mod constants;
 pub mod display;
 pub mod pkg;
+pub mod version;
 
 use std::sync::Mutex;
 

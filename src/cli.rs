@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
-#[command(name = "waka", version, about = "Waka - an alpm front-end inspired by nala")]
+#[command(name = "waka", about = "Waka - an alpm front-end inspired by nala")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,

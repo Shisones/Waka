@@ -106,20 +106,24 @@ fn current_download_uses_the_package_name() {
 }
 
 #[test]
-fn progress_splits_into_bar_and_left_aligned_details() {
+fn progress_bar_ends_with_percentage_and_details_split_left_right() {
     let mut s = download_state(512, 2048);
     s.total_files = 1;
     let wide = s.build_at(120, 24);
+
     let bar = wide.iter().find(|l| l.contains('━')).expect("bar row");
-    assert!(bar.contains('━') || bar.contains('─'), "{bar:?}");
-    assert!(!bar.contains('%'), "{bar:?}");
     assert_eq!(display_width(bar), 120, "{bar:?}");
-    let details = wide.iter().find(|l| l.contains('%')).expect("detail row");
-    assert!(details.contains("ETA"), "{details:?}");
+    let bar_text = bar.trim_end_matches('\u{2502}').trim_end();
+    assert!(bar_text.ends_with("25.0%"), "{bar:?}");
+
+    let details = wide.iter().find(|l| l.contains("ETA")).expect("detail row");
     let rest = details.strip_prefix("\u{2502} ").expect("box prefix");
-    assert!(rest.starts_with("25.0%"), "details should start at the left: {details:?}");
+    assert!(rest.starts_with("ETA "), "{details:?}");
+    assert!(rest.contains("KiB"), "{details:?}");
+    let before_border = details.trim_end_matches('\u{2502}').trim_end();
+    assert!(before_border.ends_with("/s"), "speed should sit on the right: {details:?}");
 
     let narrow = s.build_at(30, 24);
-    let details = narrow.iter().find(|l| l.contains('%')).expect("narrow detail");
-    assert!(!details.contains("ETA"), "{details:?}");
+    let details = narrow.iter().find(|l| l.contains("ETA")).expect("narrow detail");
+    assert!(!details.contains("/s"), "speed should be dropped: {details:?}");
 }

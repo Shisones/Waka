@@ -19,7 +19,6 @@ pub enum Color {
     Yellow,
     Blue,
     Cyan,
-    Black,
 }
 
 impl Color {
@@ -30,7 +29,6 @@ impl Color {
             Color::Yellow => "1;33",
             Color::Blue => "1;34",
             Color::Cyan => "1;36",
-            Color::Black => "30",
         }
     }
 }
@@ -43,7 +41,6 @@ pub fn green(s: &str) -> String { color(s, Color::Green) }
 pub fn red(s: &str) -> String { color(s, Color::Red) }
 pub fn yellow(s: &str) -> String { color(s, Color::Yellow) }
 pub fn cyan(s: &str) -> String { color(s, Color::Cyan) }
-pub fn black(s: &str) -> String { color(s, Color::Black) }
 
 pub fn bold(s: &str) -> String {
     if no_color() { s.to_string() } else { format!("\x1b[1m{s}{RESET}") }
@@ -62,7 +59,8 @@ mod tests {
     use super::Color;
 
     #[test]
-    fn black_uses_sgr_30() {
-        assert_eq!(Color::Black.code(), "30");
+    fn test_colors_use_expected_sgr_codes() {
+        assert_eq!(Color::Blue.code(), "1;34");
+        assert_eq!(Color::Cyan.code(), "1;36");
     }
 }

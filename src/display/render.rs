@@ -203,7 +203,8 @@ impl DownloadState {
         out
     }
 
-    /// Full-width bar on its own line, detail centred and dimmed underneath.
+    /// Bar with the percentage at its end, ETA on the left and the size and
+    /// speed on the right.
     fn progress_rows(&self, w: usize) -> Vec<String> {
         let pct = if self.total_bytes > 0 {
             (self.completed_bytes as f64 / self.total_bytes as f64 * 100.0).min(100.0)
@@ -211,30 +212,33 @@ impl DownloadState {
             0.0
         };
         let content_w = w.saturating_sub(3);
+        let pct_s = format!("{pct:.1}%");
+        let pct_w = draw::display_width(&pct_s);
         let mut out = Vec::new();
 
-        if content_w >= 4 {
-            let bar = draw::progress_bar(pct, content_w - 2);
-            out.push(draw::box_row_w(&format!("[{bar}]"), w));
+        if content_w >= pct_w + 8 {
+            let bar = draw::progress_bar(pct, content_w - pct_w - 3);
+            out.push(draw::box_row_w(&format!("[{bar}] {pct_s}"), w));
+        } else {
+            out.push(draw::box_row_w(&pct_s, w));
         }
 
         let elapsed = self.start.elapsed().as_secs_f64();
-        let pct_s = format!("{pct:.1}%");
-        let sep = "\u{2022}";
-        // Only the percentage stays at the default colour; everything after
-        // it is dimmed.
-        let tiers = [
-            format!(" {sep} {} {sep} {} {sep} ETA {}", self.dl_status(), self.speed(elapsed), self.eta(elapsed)),
-            format!(" {sep} {} {sep} ETA {}", self.dl_status(), self.eta(elapsed)),
-            format!(" {sep} {}", self.dl_status()),
-            String::new(),
-        ];
-        let rest = tiers
-            .iter()
-            .find(|rest| draw::display_width(&pct_s) + draw::display_width(rest) <= content_w)
-            .unwrap_or(&tiers[3]);
-        let line = format!("{pct_s}{}", style::black(rest));
-        out.push(draw::box_row_w(&line, w));
+        let eta = format!("ETA {}", self.eta(elapsed));
+        let size = self.dl_status();
+        let speed = style::color(&self.speed(elapsed), style::Color::Blue);
+        let eta_w = draw::display_width(&eta);
+        let right = [format!("{size}   {speed}"), size, String::new()]
+            .into_iter()
+            .find(|right| eta_w + 2 + draw::display_width(right) <= content_w)
+            .unwrap_or_default();
+
+        if right.is_empty() {
+            out.push(draw::box_row_w(&eta, w));
+        } else {
+            let gap = content_w.saturating_sub(eta_w + draw::display_width(&right));
+            out.push(draw::box_row_w(&format!("{eta}{}{right}", " ".repeat(gap)), w));
+        }
         out
     }
 }

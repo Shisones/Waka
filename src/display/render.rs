@@ -224,24 +224,34 @@ impl DownloadState {
         }
 
         let elapsed = self.start.elapsed().as_secs_f64();
-        let eta = style::bold(&format!("ETA {}", self.eta(elapsed)));
-        let size = style::bold(&self.dl_status());
-        let speed = style::color(&self.speed(elapsed), style::Color::Blue);
-        let eta_w = draw::display_width(&eta);
-        let right = [
-            format!("{size} \u{2022} {speed}"),
-            size,
-            String::new(),
-        ]
-        .into_iter()
-        .find(|right| eta_w + 2 + draw::display_width(right) <= content_w)
-        .unwrap_or_default();
+        let eta = style::cyan(&format!("ETA {}", self.eta(elapsed)));
+        let packages = style::green(&format!("{}/{} Packages", self.completed_files, self.total_files));
+        let size = style::green(&self.dl_status());
+        let speed = style::cyan(&self.speed(elapsed));
 
+        let left_full = format!("{eta} \u{2022} {packages}");
+        let right_full = format!("{size} \u{2022} {speed}");
+        let candidates = [
+            (left_full.clone(), right_full),
+            (left_full, size),
+            (format!("{eta} \u{2022} {packages}"), String::new()),
+            (eta, String::new()),
+        ];
+        let (left, right) = candidates
+            .into_iter()
+            .find(|(left, right)| {
+                draw::display_width(left) + 2 + draw::display_width(right) <= content_w
+            })
+            .unwrap_or_default();
+
+        if left.is_empty() && right.is_empty() {
+            return out;
+        }
         if right.is_empty() {
-            out.push(draw::box_row_w(&eta, w));
+            out.push(draw::box_row_w(&left, w));
         } else {
-            let gap = content_w.saturating_sub(eta_w + draw::display_width(&right));
-            out.push(draw::box_row_w(&format!("{eta}{}{right}", " ".repeat(gap)), w));
+            let gap = content_w.saturating_sub(draw::display_width(&left) + draw::display_width(&right));
+            out.push(draw::box_row_w(&format!("{left}{}{right}", " ".repeat(gap)), w));
         }
         out
     }

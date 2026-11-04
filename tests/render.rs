@@ -120,6 +120,7 @@ fn progress_bar_ends_with_percentage_and_details_split_left_right() {
     let rest = details.strip_prefix("\u{2502} ").expect("box prefix");
     assert!(rest.starts_with("ETA "), "{details:?}");
     assert!(rest.contains("KiB"), "{details:?}");
+    assert!(rest.contains('\u{2022}'), "size and speed need a dot spacer: {details:?}");
     let before_border = details.trim_end_matches('\u{2502}').trim_end();
     assert!(before_border.ends_with("/s"), "speed should sit on the right: {details:?}");
 

@@ -218,20 +218,24 @@ impl DownloadState {
 
         if content_w >= pct_w + 8 {
             let bar = draw::progress_bar(pct, content_w - pct_w - 3);
-            out.push(draw::box_row_w(&format!("[{bar}] {pct_s}"), w));
+            out.push(draw::box_row_w(&format!("[{bar}] {}", style::bold(&pct_s)), w));
         } else {
-            out.push(draw::box_row_w(&pct_s, w));
+            out.push(draw::box_row_w(&style::bold(&pct_s), w));
         }
 
         let elapsed = self.start.elapsed().as_secs_f64();
-        let eta = format!("ETA {}", self.eta(elapsed));
-        let size = self.dl_status();
+        let eta = style::bold(&format!("ETA {}", self.eta(elapsed)));
+        let size = style::bold(&self.dl_status());
         let speed = style::color(&self.speed(elapsed), style::Color::Blue);
         let eta_w = draw::display_width(&eta);
-        let right = [format!("{size}   {speed}"), size, String::new()]
-            .into_iter()
-            .find(|right| eta_w + 2 + draw::display_width(right) <= content_w)
-            .unwrap_or_default();
+        let right = [
+            format!("{size} \u{2022} {speed}"),
+            size,
+            String::new(),
+        ]
+        .into_iter()
+        .find(|right| eta_w + 2 + draw::display_width(right) <= content_w)
+        .unwrap_or_default();
 
         if right.is_empty() {
             out.push(draw::box_row_w(&eta, w));

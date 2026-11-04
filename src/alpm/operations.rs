@@ -678,7 +678,7 @@ pub fn run_upgrade(assume_yes: bool, autoremove: bool) -> Result<()> {
     commit_epilogue(&shared, h, commit_result, "Downloading packages")?;
 
     if autoremove {
-        run_autoremove_impl(true)?;
+        run_autoremove_impl(assume_yes)?;
     }
 
     Ok(())

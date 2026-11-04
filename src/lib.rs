@@ -61,3 +61,9 @@ pub fn clear_lockfile() {
         *guard = None;
     }
 }
+
+/// True only when this process created the ALPM lock during a successful
+/// transaction init, so an interrupt never removes another process's lock.
+pub fn owns_lockfile() -> bool {
+    LOCKFILE.lock().map(|guard| guard.is_some()).unwrap_or(false)
+}

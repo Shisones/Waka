@@ -106,7 +106,7 @@ fn current_download_uses_the_package_name() {
 }
 
 #[test]
-fn progress_splits_into_bar_and_centred_details() {
+fn progress_splits_into_bar_and_left_aligned_details() {
     let mut s = download_state(512, 2048);
     s.total_files = 1;
     let wide = s.build_at(120, 24);
@@ -116,6 +116,8 @@ fn progress_splits_into_bar_and_centred_details() {
     assert_eq!(display_width(bar), 120, "{bar:?}");
     let details = wide.iter().find(|l| l.contains('%')).expect("detail row");
     assert!(details.contains("ETA"), "{details:?}");
+    let rest = details.strip_prefix("\u{2502} ").expect("box prefix");
+    assert!(rest.starts_with("25.0%"), "details should start at the left: {details:?}");
 
     let narrow = s.build_at(30, 24);
     let details = narrow.iter().find(|l| l.contains('%')).expect("narrow detail");

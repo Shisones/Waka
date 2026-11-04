@@ -221,20 +221,20 @@ impl DownloadState {
         let elapsed = self.start.elapsed().as_secs_f64();
         let pct_s = format!("{pct:.1}%");
         let sep = "\u{2022}";
+        // Only the percentage stays at the default colour; everything after
+        // it is dimmed.
         let tiers = [
-            format!("{pct_s} {sep} {} {sep} {} {sep} ETA {}", self.dl_status(), self.speed(elapsed), self.eta(elapsed)),
-            format!("{pct_s} {sep} {} {sep} ETA {}", self.dl_status(), self.eta(elapsed)),
-            format!("{pct_s} {sep} {}", self.dl_status()),
-            pct_s.clone(),
+            format!(" {sep} {} {sep} {} {sep} ETA {}", self.dl_status(), self.speed(elapsed), self.eta(elapsed)),
+            format!(" {sep} {} {sep} ETA {}", self.dl_status(), self.eta(elapsed)),
+            format!(" {sep} {}", self.dl_status()),
+            String::new(),
         ];
-        let details = tiers
+        let rest = tiers
             .iter()
-            .find(|t| draw::display_width(t) <= content_w)
+            .find(|rest| draw::display_width(&pct_s) + draw::display_width(rest) <= content_w)
             .unwrap_or(&tiers[3]);
-        let dimmed = style::dim(details);
-        let width = draw::display_width(&dimmed);
-        let left = content_w.saturating_sub(width) / 2;
-        out.push(draw::box_row_w(&format!("{}{}", " ".repeat(left), dimmed), w));
+        let line = format!("{pct_s}{}", style::dim(rest));
+        out.push(draw::box_row_w(&line, w));
         out
     }
 }

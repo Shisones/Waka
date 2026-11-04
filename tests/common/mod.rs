@@ -5,6 +5,8 @@ use waka::display::render::DownloadState;
 pub fn download_state(completed_bytes: i64, total_bytes: i64) -> DownloadState {
     DownloadState {
         rendered: 0,
+        last_size: None,
+        resize: Default::default(),
         title: String::new(),
         phase: false,
         total_bytes,

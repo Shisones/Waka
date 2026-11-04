@@ -6,7 +6,8 @@ use std::time::{Duration, Instant};
 
 pub fn callbacks(handle: &alpm::Alpm, title: &str) -> Arc<Mutex<render::DownloadState>> {
     let shared = Arc::new(Mutex::new(render::DownloadState {
-        rendered: 0, title: style::bold(title), phase: false,
+        rendered: 0, last_size: None, resize: Default::default(),
+        title: style::bold(title), phase: false,
         total_bytes: 0, completed_bytes: 0, total_files: 0, completed_files: 0,
         currently_downloading: None,
         completed_downloads: Vec::new(), file_to_pkg: HashMap::new(),

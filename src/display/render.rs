@@ -33,6 +33,8 @@ pub fn confirm(prompt: &str) -> bool {
 #[derive(Debug)]
 pub struct DownloadState {
     pub rendered: usize,
+    pub last_size: Option<(usize, usize)>,
+    pub resize: crate::display::resize::Resize,
     pub title: String,
     pub phase: bool,
     pub total_bytes: i64,
@@ -65,6 +67,24 @@ impl DownloadState {
 
     pub fn render(&mut self) {
         let now = Instant::now();
+        if std::io::stdout().is_terminal() {
+            let size = (draw::term_width(), draw::term_rows());
+            if self.last_size != Some(size) {
+                self.last_size = Some(size);
+                if self.resize.changed(self.rendered, now) {
+                    return;
+                }
+            }
+            if self.resize.is_waiting() {
+                if !self.resize.settled(now) {
+                    return;
+                }
+                // A reflowed frame cannot be erased by row count, so leave it
+                // and start the next block underneath.
+                println!();
+                self.rendered = 0;
+            }
+        }
         if now.duration_since(self.last_render).as_millis() < 50 { return; }
         self.last_render = now;
         let tty = std::io::stdout().is_terminal();

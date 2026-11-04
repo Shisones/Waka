@@ -7,6 +7,8 @@ pub struct DbSyncState {
     pub bytes: HashMap<String, (i64, i64)>,
     active: HashSet<String>,
     rendered: usize,
+    last_size: Option<(usize, usize)>,
+    resize: crate::display::resize::Resize,
     last_render: Instant,
 }
 
@@ -16,6 +18,8 @@ impl Default for DbSyncState {
             bytes: HashMap::new(),
             active: HashSet::new(),
             rendered: 0,
+            last_size: None,
+            resize: crate::display::resize::Resize::default(),
             last_render: Instant::now() - Duration::from_millis(200),
         }
     }
@@ -39,9 +43,23 @@ impl DbSyncState {
 
     pub fn render(&mut self) {
         let now = Instant::now();
+        if !std::io::stdout().is_terminal() { return; }
+        let size = (draw::term_width(), draw::term_rows());
+        if self.last_size != Some(size) {
+            self.last_size = Some(size);
+            if self.resize.changed(self.rendered, now) {
+                return;
+            }
+        }
+        if self.resize.is_waiting() {
+            if !self.resize.settled(now) {
+                return;
+            }
+            println!();
+            self.rendered = 0;
+        }
         if now.duration_since(self.last_render).as_millis() < 50 { return; }
         self.last_render = now;
-        if !std::io::stdout().is_terminal() { return; }
         print!("{}", draw::clear_block(self.rendered));
         self.rendered = 0;
         let lines = self.live_lines();

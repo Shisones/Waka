@@ -4,6 +4,9 @@ use waka::cli::Cli;
 fn main() {
     let lock_path = waka::constants::lock_file();
     ctrlc::set_handler(move || {
+        if waka::alpm::transaction::interrupt_active() {
+            return;
+        }
         if waka::owns_lockfile() && lock_path.exists() {
             let _ = std::fs::remove_file(&lock_path);
         }
@@ -19,7 +22,17 @@ fn main() {
     };
 
     if let Err(e) = waka::run(cli) {
-        eprintln!("{}", waka::display::style::error(&e.to_string()));
+        exit_with(e);
+    }
+}
+
+fn exit_with(e: anyhow::Error) -> ! {
+    if e.downcast_ref::<waka::Aborted>().is_some() {
         std::process::exit(1);
     }
+    eprintln!(
+        "{}",
+        waka::display::style::error(&waka::display::draw::sanitize(&e.to_string()))
+    );
+    std::process::exit(1);
 }

@@ -1,12 +1,13 @@
 # Maintainer: Shisones <shisones745@proton.me>
 
 pkgname=waka
-pkgver=0.1.4
+pkgver=0.1.5
 pkgrel=1
 pkgdesc="A front-end for libalpm, inspired by nala"
 url="https://github.com/Shisones/Waka"
 license=('GPL-3.0-only')
 arch=('x86_64')
+options=('!debug')
 makedepends=('cargo')
 depends=('glibc' 'gcc-libs' 'pacman')
 optdepends=('curl: for waka fetch')

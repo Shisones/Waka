@@ -1,4 +1,4 @@
-use crate::display::{format as fmt, render, style};
+use crate::display::{draw, format as fmt, render, style};
 use alpm::{DownloadEvent, Event, PackageOperation};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -12,7 +12,7 @@ pub fn callbacks(handle: &alpm::Alpm, title: &str, assume_yes: bool) -> Arc<Mute
         currently_downloading: None,
         completed_downloads: Vec::new(), file_to_pkg: HashMap::new(),
         start: Instant::now(), last_render: Instant::now(),
-        per_file: HashMap::new(), pkg_sizes: HashMap::new(), log: Vec::new(),
+        per_file: HashMap::new(), pkg_sizes: HashMap::new(), log: Vec::new(), log_rows: 5,
     }));
 
     let s = Arc::clone(&shared);
@@ -112,17 +112,27 @@ pub fn callbacks(handle: &alpm::Alpm, title: &str, assume_yes: bool) -> Arc<Mute
                 state.render();
             }
             Event::ScriptletInfo(ev) => {
-                let l = ev.line().trim().to_string();
+                let l = draw::sanitize(ev.line().trim());
                 if !l.is_empty() { state.log.push(format!("    {}", style::dim(&l))); state.render(); }
             }
             Event::HookRunStart(ev) => {
                 if !state.phase { state.next_phase(); }
                 state.phase = true;
-                let desc = ev.desc().unwrap_or(ev.name());
+                let desc = draw::sanitize(ev.desc().unwrap_or(ev.name()));
                 state.log.push(format!("{} {}", style::cyan("Processing:"), desc));
                 state.render();
             }
             Event::HookRunDone(_) => {
+                state.render();
+            }
+            Event::PacnewCreated(ev) => {
+                let file = draw::sanitize(ev.file());
+                state.log.push(format!("{} {} installed as .pacnew", style::yellow("warning:"), file));
+                state.render();
+            }
+            Event::PacsaveCreated(ev) => {
+                let file = draw::sanitize(ev.file());
+                state.log.push(format!("{} {} saved as .pacsave", style::yellow("warning:"), file));
                 state.render();
             }
             _ => {}
@@ -130,45 +140,128 @@ pub fn callbacks(handle: &alpm::Alpm, title: &str, assume_yes: bool) -> Arc<Mute
     });
 
     let s = Arc::clone(&shared);
+    handle.set_log_cb(s, |level, msg, arc| {
+        if !level.intersects(alpm::LogLevel::WARNING | alpm::LogLevel::ERROR) {
+            return;
+        }
+        let msg = draw::sanitize(msg.trim());
+        if msg.is_empty() {
+            return;
+        }
+        let mut state = arc.lock().unwrap();
+        state.log.push(format!("{} {msg}", style::yellow("warning:")));
+        state.render();
+    });
+
+    let s = Arc::clone(&shared);
     handle.set_question_cb(s, move |q, arc| {
         use alpm::Question;
+        let pause = |arc: &Arc<Mutex<render::DownloadState>>| {
+            arc.lock().unwrap().done();
+        };
         let note = match q.question() {
             Question::InstallIgnorepkg(mut q) => {
-                q.set_install(true);
-                "auto-answer: installing ignored package"
+                let name = draw::sanitize(q.pkg().name());
+                let install = if assume_yes {
+                    false
+                } else {
+                    pause(arc);
+                    render::confirm_no(&style::bold(&format!(
+                        "\n {name} is in IgnorePkg. Install it anyway? [y/N] "
+                    )))
+                };
+                q.set_install(install);
+                if install { "installing ignored package" } else { "keeping ignored package" }
             }
             Question::Replace(q) => {
-                q.set_replace(true);
-                "auto-answer: replacing package"
+                let old = draw::sanitize(q.oldpkg().name());
+                let new = draw::sanitize(q.newpkg().name());
+                let replace = if assume_yes {
+                    true
+                } else {
+                    pause(arc);
+                    render::confirm(&style::bold(&format!(
+                        "\n Replace {old} with {new}? [Y/n] "
+                    )))
+                };
+                q.set_replace(replace);
+                if replace { "replacing package" } else { "keeping package" }
             }
             Question::Conflict(mut q) => {
-                q.set_remove(true);
-                "auto-answer: removing conflicting package"
+                let (first, second) = {
+                    let conflict = q.conflict();
+                    (
+                        draw::sanitize(conflict.package1().name()),
+                        draw::sanitize(conflict.package2().name()),
+                    )
+                };
+                let remove = if assume_yes {
+                    false
+                } else {
+                    pause(arc);
+                    render::confirm_no(&style::bold(&format!(
+                        "\n {first} and {second} conflict. Remove the installed one? [y/N] "
+                    )))
+                };
+                q.set_remove(remove);
+                if remove { "removing conflicting package" } else { "keeping conflicting package" }
             }
             Question::SelectProvider(mut q) => {
-                q.set_index(0);
-                "auto-answer: using the first provider"
+                let depend = draw::sanitize(q.depend().name());
+                let options: Vec<String> = q
+                    .providers()
+                    .iter()
+                    .map(|pkg| format!("{} {}", draw::sanitize(pkg.name()), pkg.version()))
+                    .collect();
+                let index = if assume_yes || options.len() <= 1 {
+                    0
+                } else {
+                    pause(arc);
+                    render::select(&format!("\n Providers for {depend}:"), &options, 0)
+                };
+                q.set_index(index as i32);
+                "selected provider"
             }
             Question::ImportKey(mut q) => {
                 let import = if assume_yes {
                     true
                 } else {
-                    {
-                        let mut state = arc.lock().unwrap();
-                        state.done();
-                    }
+                    pause(arc);
                     render::confirm(&style::bold("\n Import the required PGP key? [Y/n] "))
                 };
                 q.set_import(import);
                 if import { "imported PGP key" } else { "declined PGP key import" }
             }
             Question::Corrupted(mut q) => {
-                q.set_remove(true);
-                "auto-answer: deleting corrupted package"
+                let file = draw::sanitize(q.filepath());
+                let remove = if assume_yes {
+                    true
+                } else {
+                    pause(arc);
+                    render::confirm(&style::bold(&format!(
+                        "\n {file} is corrupted. Delete it? [Y/n] "
+                    )))
+                };
+                q.set_remove(remove);
+                if remove { "deleting corrupted package" } else { "keeping corrupted package" }
             }
             Question::RemovePkgs(mut q) => {
-                q.set_skip(false);
-                "auto-answer: proceeding with removal"
+                let names: Vec<String> = q
+                    .packages()
+                    .iter()
+                    .map(|pkg| draw::sanitize(pkg.name()))
+                    .collect();
+                let skip = if assume_yes {
+                    false
+                } else {
+                    pause(arc);
+                    !render::confirm(&style::bold(&format!(
+                        "\n Remove {}? [Y/n] ",
+                        names.join(", ")
+                    )))
+                };
+                q.set_skip(skip);
+                if skip { "skipped removal" } else { "proceeding with removal" }
             }
         };
         let mut state = arc.lock().unwrap();

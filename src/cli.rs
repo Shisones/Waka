@@ -27,7 +27,7 @@ pub enum Command {
     /// Install packages (pacman -S)
     #[command()]
     Install {
-        /// Package names to install
+        /// Package names or local .pkg.tar.* archives to install
         packages: Vec<String>,
 
         /// Assume yes to all prompts
@@ -35,7 +35,7 @@ pub enum Command {
         assume_yes: bool,
     },
 
-    /// Remove packages and their dependencies + config files (pacman -Rns)
+    /// Remove packages, reverse dependencies, unused deps and config files (pacman -Rcns)
     #[command()]
     Remove {
         /// Package names to remove

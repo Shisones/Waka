@@ -18,16 +18,56 @@ pub fn pkg_name_from_filename(fname: &str) -> String {
 }
 
 pub fn confirm(prompt: &str) -> bool {
+    confirm_default(prompt, true)
+}
+
+pub fn confirm_no(prompt: &str) -> bool {
+    confirm_default(prompt, false)
+}
+
+pub fn confirm_default(prompt: &str, default: bool) -> bool {
     if !std::io::stdin().is_terminal() {
         return false;
     }
     print!("{}", prompt);
     std::io::stdout().flush().ok();
     let mut line = String::new();
-    std::io::stdin().lock().read_line(&mut line).ok();
+    let read = std::io::stdin().lock().read_line(&mut line);
     let line = line.trim();
     println!();
-    line.is_empty() || line.eq_ignore_ascii_case("y") || line.eq_ignore_ascii_case("yes")
+    if !matches!(read, Ok(n) if n > 0) {
+        return false;
+    }
+    if line.is_empty() {
+        return default;
+    }
+    line.eq_ignore_ascii_case("y") || line.eq_ignore_ascii_case("yes")
+}
+
+/// Numbered choice. Returns the zero-based index.
+pub fn select(prompt: &str, options: &[String], default: usize) -> usize {
+    if !std::io::stdin().is_terminal() || options.is_empty() {
+        return default.min(options.len().saturating_sub(1));
+    }
+    println!("{prompt}");
+    for (index, option) in options.iter().enumerate() {
+        println!("  {}) {option}", index + 1);
+    }
+    print!("
+ Enter a number (default={}): ", default + 1);
+    std::io::stdout().flush().ok();
+    let mut line = String::new();
+    let read = std::io::stdin().lock().read_line(&mut line);
+    println!();
+    if !matches!(read, Ok(n) if n > 0) {
+        return default.min(options.len().saturating_sub(1));
+    }
+    line.trim()
+        .parse::<usize>()
+        .ok()
+        .filter(|n| *n >= 1 && *n <= options.len())
+        .map(|n| n - 1)
+        .unwrap_or(default.min(options.len().saturating_sub(1)))
 }
 
 /// True when a command would have to ask and stdin cannot answer.
@@ -74,6 +114,7 @@ pub struct DownloadState {
     pub start: Instant,
     pub last_render: Instant,
     pub log: Vec<String>,
+    pub log_rows: usize,
     pub per_file: HashMap<String, FileProgress>,
     pub pkg_sizes: HashMap<String, i64>,
 }
@@ -217,7 +258,7 @@ impl DownloadState {
             out.extend(self.progress_rows(w));
         } else if !self.log.is_empty() {
             out.push(draw::box_top_w(&self.title, w));
-            let start = self.log.len().saturating_sub(5.min(body_cap));
+            let start = self.log.len().saturating_sub(self.log_rows.min(body_cap));
             for entry in &self.log[start..] {
                 out.push(draw::box_row_w(entry, w));
             }
@@ -287,3 +328,4 @@ impl DownloadState {
         out
     }
 }
+

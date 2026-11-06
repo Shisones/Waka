@@ -2,7 +2,8 @@ use crate::alpm::handle::AlpmHandle;
 use crate::display::{draw, style};
 use anyhow::Result;
 
-pub fn show_packages(handle: &AlpmHandle, packages: &[String]) -> Result<()> {
+pub fn print_packages(handle: &AlpmHandle, packages: &[String]) -> Result<()> {
+    let mut missing: Vec<String> = Vec::new();
     for (i, name) in packages.iter().enumerate() {
         let pkg = handle
             .find_local_pkg(name)
@@ -10,8 +11,11 @@ pub fn show_packages(handle: &AlpmHandle, packages: &[String]) -> Result<()> {
 
         match pkg {
             Some(pkg) => print_pkg_info(pkg, i),
-            None => eprintln!("{}", style::color(&format!("package '{name}' not found"), style::Color::Red)),
+            None => missing.push(name.clone()),
         }
+    }
+    if !missing.is_empty() {
+        return Err(anyhow::anyhow!("target not found: {}", missing.join(", ")));
     }
     Ok(())
 }
@@ -44,7 +48,6 @@ fn print_pkg_info(pkg: &alpm::Package, num: usize) {
             .unwrap_or_default()
     });
     let build = pkg.build_date();
-    let repo = pkg.db().map(|db| db.name().to_string()).unwrap_or("now".to_string());
 
     lines.push(format!("{} {}", style::color("Package:", style::Color::Green), style::color(name, style::Color::Green)));
     lines.push(format!("{} {}", style::color("Version:", style::Color::Blue), style::color(version, style::Color::Blue)));
@@ -76,7 +79,7 @@ fn print_pkg_info(pkg: &alpm::Package, num: usize) {
         lines.push(format!("{} {}", style::bold("Provides:"), provides.join(", ")));
     }
 
-    if repo != "now" || pkg.size() > 0 {
+    if pkg.size() > 0 {
         lines.push(format!("{} {}", style::bold("Download Size:"), crate::display::format::format_size(pkg.size())));
     }
 
@@ -118,9 +121,12 @@ fn dep_lines(deps: &[String]) -> Vec<String> {
     }
 }
 
-fn format_maintainer(raw: &str) -> String {
+pub fn format_maintainer(raw: &str) -> String {
     if let Some(open) = raw.find('<') {
-        let close = raw.find('>').unwrap_or(raw.len());
+        let close = raw[open + 1..]
+            .find('>')
+            .map(|offset| open + 1 + offset)
+            .unwrap_or(raw.len());
         let name_part = raw[..open].trim();
         let email_part = raw[open + 1..close].trim();
         let colored_email = style::color(email_part, style::Color::Blue);

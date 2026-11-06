@@ -91,3 +91,12 @@ fn display_width_counts_wide_chars() {
     assert_eq!(display_width("héllo"), 5);
     assert_eq!(display_width("你好"), 4);
 }
+#[test]
+fn sanitize_strips_control_and_bidi_characters() {
+    use waka::display::draw::sanitize;
+    let raw = "x\u{1b}[2J\u{202e}y\u{200b}z\r\n";
+    let clean = sanitize(raw);
+    assert!(!clean.chars().any(|c| c.is_control()));
+    assert!(!clean.contains('\u{202e}'));
+    assert!(!clean.contains('\u{200b}'));
+}

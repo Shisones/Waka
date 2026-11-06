@@ -29,12 +29,10 @@ pub fn search_packages(handle: &AlpmHandle, terms: &[String]) -> Result<()> {
     results.sort_by(|a, b| a.0.name().cmp(b.0.name()));
 
     if results.is_empty() {
-        eprintln!(
-            " {}: no packages found matching '{}'",
-            style::yellow("warn"),
-            style::color(&terms.join(" "), style::Color::Green)
-        );
-        return Ok(());
+        return Err(anyhow::anyhow!(
+            "no packages found matching '{}'",
+            terms.join(" ")
+        ));
     }
 
     let rows: Vec<SearchRow> = results
@@ -66,19 +64,19 @@ pub fn search_packages(handle: &AlpmHandle, terms: &[String]) -> Result<()> {
     Ok(())
 }
 
-struct SearchRow {
-    label: String,
-    width: usize,
-    version: String,
-    version_width: usize,
-    size: String,
-    size_width: usize,
-    installed: bool,
-    desc: String,
+pub struct SearchRow {
+    pub label: String,
+    pub width: usize,
+    pub version: String,
+    pub version_width: usize,
+    pub size: String,
+    pub size_width: usize,
+    pub installed: bool,
+    pub desc: String,
 }
 
 /// Fixed columns: ` repo/name  version  size [installed]`, description below.
-fn search_lines(rows: &[SearchRow], w: usize) -> Vec<String> {
+pub fn search_lines(rows: &[SearchRow], w: usize) -> Vec<String> {
     if rows.is_empty() {
         return Vec::new();
     }
@@ -125,41 +123,4 @@ fn search_lines(rows: &[SearchRow], w: usize) -> Vec<String> {
         }
     }
     out
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{matches_terms, search_lines, SearchRow};
-    use crate::display::draw::display_width;
-
-    #[test]
-    fn all_terms_must_match() {
-        let terms = vec!["fire".to_string(), "browser".to_string()];
-        assert!(matches_terms("firefox", "fast web browser", &terms));
-        assert!(!matches_terms("firefox", "fast web browser", &["fire".into(), "mail".into()]));
-    }
-
-    #[test]
-    fn terms_can_match_the_description() {
-        assert!(matches_terms("firefox", "Fast, private browser", &["private".into()]));
-    }
-
-    #[test]
-    fn search_rows_fit_every_width() {
-        let rows = vec![SearchRow {
-            label: "core/firefox".to_string(),
-            width: 12,
-            version: "136.0-1".to_string(),
-            version_width: 7,
-            size: "80 MiB".to_string(),
-            size_width: 6,
-            installed: true,
-            desc: "Fast, private browser".to_string(),
-        }];
-        for w in 12..=120 {
-            for line in search_lines(&rows, w) {
-                assert!(display_width(&line) <= w, "w={w}: {line:?}");
-            }
-        }
-    }
 }

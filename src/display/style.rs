@@ -6,7 +6,7 @@ static NO_COLOR: OnceLock<bool> = OnceLock::new();
 fn no_color() -> bool {
     *NO_COLOR.get_or_init(|| {
         std::env::var("NO_COLOR").is_ok()
-            || (!std::io::stdout().is_terminal() && !std::io::stderr().is_terminal())
+            || !std::io::stdout().is_terminal()
     })
 }
 
@@ -22,7 +22,7 @@ pub enum Color {
 }
 
 impl Color {
-    fn code(&self) -> &'static str {
+    pub fn code(&self) -> &'static str {
         match self {
             Color::Red => "1;31",
             Color::Green => "1;32",
@@ -52,15 +52,4 @@ pub fn dim(s: &str) -> String {
 
 pub fn error(s: &str) -> String {
     format!("{} {s}", color("error:", Color::Red))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Color;
-
-    #[test]
-    fn test_colors_use_expected_sgr_codes() {
-        assert_eq!(Color::Blue.code(), "1;34");
-        assert_eq!(Color::Cyan.code(), "1;36");
-    }
 }

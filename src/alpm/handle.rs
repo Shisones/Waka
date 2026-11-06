@@ -1,11 +1,24 @@
+use crate::alpm::conf;
 use crate::constants;
 use alpm::SigLevel;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
+use std::ffi::CString;
+use std::path::PathBuf;
+
+struct Options {
+    default_sig: SigLevel,
+    local_sig: Option<SigLevel>,
+    remote_sig: Option<SigLevel>,
+    cache_dirs: Vec<String>,
+    architectures: Vec<String>,
+    hold_pkgs: Vec<String>,
+}
 
 #[derive(Debug)]
 pub struct AlpmHandle {
     pub handle: alpm::Alpm,
+    pub hold_pkgs: Vec<String>,
 }
 
 impl AlpmHandle {
@@ -34,98 +47,76 @@ impl AlpmHandle {
         }
         handle.set_parallel_downloads(5);
 
-        Self::configure_from_file(&mut handle)?;
+        let hold_pkgs = Self::configure_from_file(&mut handle)?;
 
-        Ok(AlpmHandle { handle })
+        Ok(AlpmHandle { handle, hold_pkgs })
     }
 
-    fn configure_from_file(handle: &mut alpm::Alpm) -> Result<()> {
+    fn configure_from_file(handle: &mut alpm::Alpm) -> Result<Vec<String>> {
         let content = Self::read_conf_file(&constants::pacman_conf())?;
         let mut current: Option<String> = None;
         let mut servers: Vec<String> = Vec::new();
-        let mut default_sig: SigLevel = SigLevel::NONE;
-        let mut local_sig: SigLevel = SigLevel::NONE;
-        let mut remote_sig: SigLevel = SigLevel::NONE;
-        let mut db_sig: HashMap<String, SigLevel> = HashMap::new();
-        let mut architectures: Vec<String> = Vec::new();
-        let mut cache_dirs: Vec<String> = Vec::new();
         let mut include_paths: Vec<String> = Vec::new();
+        let mut db_sig: HashMap<String, String> = HashMap::new();
+        let mut db_usage: HashMap<String, alpm::Usage> = HashMap::new();
+        let mut opts = Options {
+            default_sig: conf::default_siglevel(),
+            local_sig: None,
+            remote_sig: None,
+            cache_dirs: Vec::new(),
+            architectures: Vec::new(),
+            hold_pkgs: Vec::new(),
+        };
 
         for line in content.lines() {
             let line = line.trim();
             if line.is_empty() || line.starts_with('#') { continue; }
-
             if line.starts_with('[') && line.ends_with(']') {
-                Self::finalize_prev_db(handle, &current, &servers, &db_sig, &default_sig, &include_paths)?;
+                Self::finalize_prev_db(handle, &current, &servers, &db_sig, &db_usage, &opts, &include_paths)?;
                 current = Some(line[1..line.len() - 1].to_string());
                 servers.clear();
                 include_paths.clear();
                 continue;
             }
-
             let Some(section) = current.as_ref() else { continue; };
             if section == "options" {
-                if let Some(v) = line.strip_prefix("SigLevel = ") {
-                    default_sig = Self::parse_siglevel(v);
-                } else if let Some(v) = line.strip_prefix("LocalFileSigLevel = ") {
-                    local_sig = Self::parse_siglevel(v);
-                } else if let Some(v) = line.strip_prefix("RemoteFileSigLevel = ") {
-                    remote_sig = Self::parse_siglevel(v);
-                } else if let Some(v) = line.strip_prefix("CacheDir = ") {
-                    cache_dirs.push(v.trim().to_string());
-                } else if let Some(v) = line.strip_prefix("Architecture = ") {
-                    let arch = v.trim();
-                    let actual = if arch == "auto" { std::env::consts::ARCH } else { arch };
-                    architectures.push(actual.to_string());
-                } else if let Some(v) = line.strip_prefix("Include = ") {
-                    if let Ok(lines) = Self::resolve_include(v.trim()) {
-                        for l in lines {
-                            if let Some(iv) = l.strip_prefix("SigLevel = ") {
-                                default_sig = Self::parse_siglevel(iv);
-                            } else if let Some(iv) = l.strip_prefix("LocalFileSigLevel = ") {
-                                local_sig = Self::parse_siglevel(iv);
-                            } else if let Some(iv) = l.strip_prefix("RemoteFileSigLevel = ") {
-                                remote_sig = Self::parse_siglevel(iv);
-                            }
-                        }
-                    }
-                } else {
-                    Self::handle_option(handle, line);
-                }
-            } else if let Some(v) = line.strip_prefix("SigLevel = ") {
-                db_sig.insert(section.clone(), Self::parse_siglevel(v));
-            } else if let Some(v) = line.strip_prefix("Include = ") {
-                include_paths.push(v.trim().to_string());
+                Self::apply_options_line(handle, line, &mut opts, 0);
+            } else if let Some(v) = conf::option_value(line, "SigLevel") {
+                db_sig.insert(section.clone(), v.to_string());
+            } else if let Some(v) = conf::option_value(line, "Usage") {
+                db_usage.insert(section.clone(), Self::parse_usage(v));
+            } else if let Some(v) = conf::option_value(line, "Include") {
+                include_paths.push(v.to_string());
             } else {
                 Self::handle_repo_line(line, &mut servers);
             }
         }
 
-        Self::finalize_prev_db(handle, &current, &servers, &db_sig, &default_sig, &include_paths)?;
+        Self::finalize_prev_db(handle, &current, &servers, &db_sig, &db_usage, &opts, &include_paths)?;
 
+        if let Err(e) = handle.set_default_siglevel(opts.default_sig) {
+            eprintln!("  {} set_default_siglevel failed: {e}", crate::display::style::yellow("warn"));
+        }
+        let local_sig = opts.local_sig.unwrap_or(opts.default_sig);
+        let remote_sig = opts.remote_sig.unwrap_or(opts.default_sig);
         if let Err(e) = handle.set_local_file_siglevel(local_sig) {
             eprintln!("  {} set_local_file_siglevel failed: {e}", crate::display::style::yellow("warn"));
         }
         if let Err(e) = handle.set_remote_file_siglevel(remote_sig) {
             eprintln!("  {} set_remote_file_siglevel failed: {e}", crate::display::style::yellow("warn"));
         }
-
-        if !cache_dirs.is_empty() {
-            if let Err(e) = handle.set_cachedirs(cache_dirs.iter().map(|s| s.as_str())) {
+        if !opts.cache_dirs.is_empty() {
+            if let Err(e) = handle.set_cachedirs(opts.cache_dirs.iter().map(|s| s.as_str())) {
                 eprintln!("  {} set_cachedirs from config failed: {e}", crate::display::style::yellow("warn"));
             }
         }
-
-        if architectures.is_empty() {
+        if opts.architectures.is_empty() {
             if let Err(e) = handle.set_architectures(std::iter::once(std::env::consts::ARCH)) {
                 eprintln!("  {} set_architectures failed: {e}", crate::display::style::yellow("warn"));
             }
-            if let Err(e) = handle.add_architecture("any") {
-                eprintln!("  {} add_architecture('any') failed: {e}", crate::display::style::yellow("warn"));
-            }
         } else {
             let mut first = true;
-            for arch in &architectures {
+            for arch in &opts.architectures {
                 if first {
                     if let Err(e) = handle.set_architectures(std::iter::once(arch.as_str())) {
                         eprintln!("  {} set_architectures failed: {e}", crate::display::style::yellow("warn"));
@@ -135,12 +126,95 @@ impl AlpmHandle {
                     eprintln!("  {} add_architecture('{arch}') failed: {e}", crate::display::style::yellow("warn"));
                 }
             }
-            if let Err(e) = handle.add_architecture("any") {
-                eprintln!("  {} add_architecture('any') failed: {e}", crate::display::style::yellow("warn"));
-            }
+        }
+        if let Err(e) = handle.add_architecture("any") {
+            eprintln!("  {} add_architecture('any') failed: {e}", crate::display::style::yellow("warn"));
         }
 
-        Ok(())
+        Ok(opts.hold_pkgs)
+    }
+
+    fn apply_options_line(
+        handle: &mut alpm::Alpm,
+        line: &str,
+        opts: &mut Options,
+        depth: usize,
+    ) {
+        if let Some(v) = conf::option_value(line, "SigLevel") {
+            opts.default_sig = conf::apply_siglevel(opts.default_sig, v);
+        } else if let Some(v) = conf::option_value(line, "LocalFileSigLevel") {
+            opts.local_sig = Some(conf::apply_siglevel(opts.default_sig, v));
+        } else if let Some(v) = conf::option_value(line, "RemoteFileSigLevel") {
+            opts.remote_sig = Some(conf::apply_siglevel(opts.default_sig, v));
+        } else if let Some(v) = conf::option_value(line, "CacheDir") {
+            opts.cache_dirs.push(v.to_string());
+        } else if let Some(v) = conf::option_value(line, "Architecture") {
+            for arch in v.split_whitespace() {
+                opts.architectures.push(if arch == "auto" {
+                    std::env::consts::ARCH.to_string()
+                } else {
+                    arch.to_string()
+                });
+            }
+        } else if let Some(v) = conf::option_value(line, "HoldPkg") {
+            opts.hold_pkgs.extend(v.split_whitespace().map(|name| name.to_string()));
+        } else if let Some(v) = conf::option_value(line, "IgnorePkg") {
+            for name in v.split_whitespace() {
+                if let Err(e) = handle.add_ignorepkg(name) {
+                    eprintln!("  {} add_ignorepkg('{name}') failed: {e}", crate::display::style::yellow("warn"));
+                }
+            }
+        } else if let Some(v) = conf::option_value(line, "IgnoreGroup") {
+            for name in v.split_whitespace() {
+                if let Err(e) = handle.add_ignoregroup(name) {
+                    eprintln!("  {} add_ignoregroup('{name}') failed: {e}", crate::display::style::yellow("warn"));
+                }
+            }
+        } else if let Some(v) = conf::option_value(line, "NoUpgrade") {
+            for path in v.split_whitespace() {
+                if let Err(e) = handle.add_noupgrade(path) {
+                    eprintln!("  {} add_noupgrade('{path}') failed: {e}", crate::display::style::yellow("warn"));
+                }
+            }
+        } else if let Some(v) = conf::option_value(line, "NoExtract") {
+            for path in v.split_whitespace() {
+                if let Err(e) = handle.add_noextract(path) {
+                    eprintln!("  {} add_noextract('{path}') failed: {e}", crate::display::style::yellow("warn"));
+                }
+            }
+        } else if let Some(v) = conf::option_value(line, "Include") {
+            if depth < 8 {
+                if let Ok(lines) = Self::resolve_include(v) {
+                    for nested in lines {
+                        let nested = nested.trim();
+                        if nested.is_empty() || nested.starts_with('#') {
+                            continue;
+                        }
+                        Self::apply_options_line(handle, nested, opts, depth + 1);
+                    }
+                }
+            }
+        } else {
+            Self::handle_option(handle, line);
+        }
+    }
+
+    fn parse_usage(value: &str) -> alpm::Usage {
+        let mut usage = alpm::Usage::empty();
+        for part in value.split_whitespace() {
+            match part {
+                "Sync" => usage |= alpm::Usage::SYNC,
+                "Search" => usage |= alpm::Usage::SEARCH,
+                "Install" => usage |= alpm::Usage::INSTALL,
+                "Upgrade" => usage |= alpm::Usage::UPGRADE,
+                "All" => usage |= alpm::Usage::SYNC | alpm::Usage::SEARCH | alpm::Usage::INSTALL | alpm::Usage::UPGRADE,
+                other => eprintln!(
+                    "  {} unknown Usage token '{other}'",
+                    crate::display::style::yellow("warn")
+                ),
+            }
+        }
+        usage
     }
 
     fn read_conf_file(path: &std::path::Path) -> Result<String> {
@@ -149,132 +223,73 @@ impl AlpmHandle {
             .with_context(|| format!("Failed to read {}", path.display()))
     }
 
-    fn parse_siglevel(val: &str) -> SigLevel {
-        let mut sig = SigLevel::NONE;
-        for part in val.split_whitespace() {
-            match part {
-                "Never" => return SigLevel::NONE,
-                "Optional" => {
-                    sig |= SigLevel::PACKAGE | SigLevel::PACKAGE_OPTIONAL
-                        | SigLevel::PACKAGE_MARGINAL_OK | SigLevel::PACKAGE_UNKNOWN_OK
-                        | SigLevel::DATABASE | SigLevel::DATABASE_OPTIONAL
-                        | SigLevel::DATABASE_MARGINAL_OK | SigLevel::DATABASE_UNKNOWN_OK;
-                }
-                "Required" => {
-                    sig |= SigLevel::PACKAGE | SigLevel::PACKAGE_MARGINAL_OK
-                        | SigLevel::DATABASE | SigLevel::DATABASE_MARGINAL_OK;
-                }
-                "Package" => sig |= SigLevel::PACKAGE,
-                "PackageOptional" => {
-                    sig |= SigLevel::PACKAGE | SigLevel::PACKAGE_OPTIONAL
-                        | SigLevel::PACKAGE_MARGINAL_OK | SigLevel::PACKAGE_UNKNOWN_OK;
-                }
-                "PackageRequired" => {
-                    sig |= SigLevel::PACKAGE | SigLevel::PACKAGE_MARGINAL_OK;
-                }
-                "PackageTrustedOnly" => sig |= SigLevel::PACKAGE,
-                "PackageTrustedAll" => sig |= SigLevel::PACKAGE | SigLevel::PACKAGE_UNKNOWN_OK,
-                "Database" => sig |= SigLevel::DATABASE,
-                "DatabaseOptional" => {
-                    sig |= SigLevel::DATABASE | SigLevel::DATABASE_OPTIONAL
-                        | SigLevel::DATABASE_MARGINAL_OK | SigLevel::DATABASE_UNKNOWN_OK;
-                }
-                "DatabaseRequired" => {
-                    sig |= SigLevel::DATABASE | SigLevel::DATABASE_MARGINAL_OK;
-                }
-                "DatabaseTrustedOnly" => sig |= SigLevel::DATABASE,
-                "DatabaseTrustedAll" => sig |= SigLevel::DATABASE | SigLevel::DATABASE_UNKNOWN_OK,
-                "TrustedOnly" => {}
-                "TrustedAll" => {
-                    sig |= SigLevel::PACKAGE_UNKNOWN_OK | SigLevel::DATABASE_UNKNOWN_OK;
-                }
-                _ => {}
+    fn glob_paths(path: &str) -> Vec<PathBuf> {
+        let Ok(path) = CString::new(path) else { return Vec::new(); };
+        let mut glob: libc::glob_t = unsafe { std::mem::zeroed() };
+        let result = unsafe { libc::glob(path.as_ptr(), 0, None, &mut glob) };
+        if result != 0 {
+            unsafe { libc::globfree(&mut glob) };
+            return Vec::new();
+        }
+        let mut paths = Vec::new();
+        for index in 0..glob.gl_pathc {
+            let ptr = unsafe { *glob.gl_pathv.add(index) };
+            if ptr.is_null() {
+                continue;
+            }
+            if let Ok(value) = unsafe { std::ffi::CStr::from_ptr(ptr) }.to_str() {
+                paths.push(PathBuf::from(value));
             }
         }
-        sig
+        unsafe { libc::globfree(&mut glob) };
+        paths
     }
 
     fn resolve_include(path: &str) -> Result<Vec<String>> {
-        let p = if path.starts_with('/') { path.to_string() } else { format!("/etc/pacman.d/{path}") };
-
-        if p.contains('*') {
-            if let Some(parent) = std::path::Path::new(&p).parent() {
-                if parent.exists() {
-                    let pattern = std::path::Path::new(&p)
-                        .file_name()
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_default();
-                    let mut results = Vec::new();
-                    if let Ok(entries) = std::fs::read_dir(parent) {
-                        for entry in entries.flatten() {
-                            if let Some(name) = entry.file_name().to_str() {
-                                if glob_match(&pattern, name) {
-                                    if let Ok(c) = Self::read_conf_file(&entry.path()) {
-                                        results.extend(c.lines().map(|l| l.to_string()));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    return Ok(results);
-                }
+        let path = if path.starts_with('/') {
+            path.to_string()
+        } else {
+            format!("/etc/pacman.d/{path}")
+        };
+        let mut results = Vec::new();
+        for file in Self::glob_paths(&path) {
+            if let Ok(content) = Self::read_conf_file(&file) {
+                results.extend(content.lines().map(|line| line.to_string()));
             }
-            return Ok(Vec::new());
         }
-
-        Self::read_conf_file(std::path::Path::new(&p))
-            .map(|c| c.lines().map(|l| l.to_string()).collect())
-            .or_else(|_| Ok(Vec::new()))
+        Ok(results)
     }
 
-    fn resolve_include_servers(path: &str, name: &str, servers: &mut Vec<String>) {
-        let p = if path.starts_with('/') { path.to_string() } else { format!("/etc/pacman.d/{path}") };
-
-        if p.contains('*') {
-            if let Some(parent) = std::path::Path::new(&p).parent() {
-                if parent.exists() {
-                    let pattern = std::path::Path::new(&p)
-                        .file_name()
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_default();
-                    if let Ok(entries) = std::fs::read_dir(parent) {
-                        for entry in entries.flatten() {
-                            if let Some(name_str) = entry.file_name().to_str() {
-                                if glob_match(&pattern, name_str) {
-                                    if let Ok(c) = Self::read_conf_file(&entry.path()) {
-                                        for line in c.lines() {
-                                            let line = line.trim();
-                                            if let Some(v) = line.strip_prefix("Server = ") {
-                                                let expanded = v.replace("$repo", name).replace("$arch", std::env::consts::ARCH);
-                                                servers.push(expanded);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+    fn resolve_include_servers(path: &str, servers: &mut Vec<String>, depth: usize) {
+        if depth > 8 {
             return;
         }
+        let path = if path.starts_with('/') {
+            path.to_string()
+        } else {
+            format!("/etc/pacman.d/{path}")
+        };
+        for file in Self::glob_paths(&path) {
+            if let Ok(content) = Self::read_conf_file(&file) {
+                Self::collect_servers(&content, servers, depth);
+            }
+        }
+    }
 
-        if let Ok(c) = Self::read_conf_file(std::path::Path::new(&p)) {
-            for line in c.lines() {
-                let line = line.trim();
-                if let Some(v) = line.strip_prefix("Server = ") {
-                    let expanded = v.replace("$repo", name).replace("$arch", std::env::consts::ARCH);
-                    servers.push(expanded);
-                } else if let Some(v) = line.strip_prefix("Include = ") {
-                    Self::resolve_include_servers(v.trim(), name, servers);
-                }
+    fn collect_servers(content: &str, servers: &mut Vec<String>, depth: usize) {
+        for line in content.lines() {
+            let line = line.trim();
+            if let Some(v) = conf::option_value(line, "Server") {
+                servers.push(v.to_string());
+            } else if let Some(v) = conf::option_value(line, "Include") {
+                Self::resolve_include_servers(v, servers, depth + 1);
             }
         }
     }
 
     fn handle_option(handle: &mut alpm::Alpm, line: &str) {
-        if let Some(v) = line.strip_prefix("DownloadUser = ") {
-            if let Err(e) = handle.set_sandbox_user(Some(v.trim())) {
+        if let Some(v) = conf::option_value(line, "DownloadUser") {
+            if let Err(e) = handle.set_sandbox_user(Some(v)) {
                 eprintln!("  {} set_sandbox_user failed: {e}", crate::display::style::yellow("warn"));
             }
         }
@@ -284,39 +299,49 @@ impl AlpmHandle {
                 handle.set_disable_sandbox_syscalls(true);
             }
         }
-        if let Some(v) = line.strip_prefix("ParallelDownloads = ") {
-            if let Ok(n) = v.trim().parse::<u32>() {
+        if let Some(v) = conf::option_value(line, "ParallelDownloads") {
+            if let Ok(n) = v.parse::<u32>() {
                 handle.set_parallel_downloads(n);
             }
         }
     }
 
     fn handle_repo_line(line: &str, servers: &mut Vec<String>) {
-        if let Some(v) = line.strip_prefix("Server = ") {
-            servers.push(v.trim().to_string());
+        if let Some(v) = conf::option_value(line, "Server") {
+            servers.push(v.to_string());
         }
     }
 
     fn finalize_prev_db(handle: &mut alpm::Alpm, current: &Option<String>, servers: &[String],
-                        db_sig: &HashMap<String, SigLevel>, default_sig: &SigLevel,
-                        include_paths: &[String]) -> Result<()> {
+                        db_sig: &HashMap<String, String>, db_usage: &HashMap<String, alpm::Usage>,
+                        opts: &Options, include_paths: &[String]) -> Result<()> {
         if let Some(name) = current {
             if name != "options" {
                 let mut final_servers = servers.to_vec();
                 for inc in include_paths {
-                    Self::resolve_include_servers(inc, name, &mut final_servers);
+                    Self::resolve_include_servers(inc, &mut final_servers, 0);
                 }
-                let sig = db_sig.get(name.as_str()).copied().unwrap_or(*default_sig);
-                Self::finalize_db(handle, name, &final_servers, sig)?;
+                let sig = match db_sig.get(name.as_str()) {
+                    Some(raw) => conf::apply_siglevel(opts.default_sig, raw),
+                    None => opts.default_sig,
+                };
+                let usage = db_usage.get(name.as_str()).copied();
+                let arch = opts.architectures.first().map(String::as_str).unwrap_or(std::env::consts::ARCH);
+                Self::finalize_db(handle, name, &final_servers, sig, usage, arch)?;
             }
         }
         Ok(())
     }
 
-    fn finalize_db(handle: &mut alpm::Alpm, name: &str, servers: &[String], sig: SigLevel) -> Result<()> {
+    fn finalize_db(handle: &mut alpm::Alpm, name: &str, servers: &[String], sig: SigLevel,
+                   usage: Option<alpm::Usage>, arch: &str) -> Result<()> {
         let db = handle.register_syncdb_mut(name, sig)
             .with_context(|| format!("Failed to register db '{name}'"))?;
-        let arch = std::env::consts::ARCH;
+        if let Some(usage) = usage {
+            if let Err(e) = db.set_usage(usage) {
+                eprintln!("  {} set_usage('{name}') failed: {e}", crate::display::style::yellow("warn"));
+            }
+        }
         for s in servers {
             let expanded = s.replace("$repo", name).replace("$arch", arch);
             db.add_server(expanded.as_str())
@@ -337,13 +362,20 @@ impl AlpmHandle {
     }
 }
 
-fn glob_match(pattern: &str, filename: &str) -> bool {
-    if pattern == "*" { return true; }
-    if let Some(prefix) = pattern.strip_suffix('*') {
-        return filename.starts_with(prefix);
+#[cfg(test)]
+mod tests {
+    use super::AlpmHandle;
+
+    #[test]
+    fn glob_paths_support_question_and_character_classes() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["foo1.conf", "foo2.conf", "bar.conf"] {
+            std::fs::write(dir.path().join(name), "").unwrap();
+        }
+        let question = format!("{}/foo?.conf", dir.path().display());
+        let classes = format!("{}/[fb]*.conf", dir.path().display());
+        assert_eq!(AlpmHandle::glob_paths(&question).len(), 2);
+        assert_eq!(AlpmHandle::glob_paths(&classes).len(), 3);
+        assert!(AlpmHandle::glob_paths(&format!("{}/missing?.conf", dir.path().display())).is_empty());
     }
-    if let Some(suffix) = pattern.strip_prefix('*') {
-        return filename.ends_with(suffix);
-    }
-    pattern == filename
 }

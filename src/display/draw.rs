@@ -103,6 +103,27 @@ pub fn box_row_w(content: &str, w: usize) -> String {
     format!("│ {content}{} │", " ".repeat(pad))
 }
 
+fn is_invisible(c: char) -> bool {
+    c.is_control()
+        || matches!(
+            c,
+            '\u{00AD}'
+                | '\u{061C}'
+                | '\u{200B}'..='\u{200F}'
+                | '\u{202A}'..='\u{202E}'
+                | '\u{2060}'..='\u{206F}'
+                | '\u{FEFF}'
+        )
+}
+
+/// Replace control, bidi, and zero-width characters so untrusted text cannot
+/// drive or visually reorder the terminal.
+pub fn sanitize(s: &str) -> String {
+    s.chars()
+        .map(|c| if is_invisible(c) { ' ' } else { c })
+        .collect()
+}
+
 pub fn strip_ansi(s: &str) -> String {
     let mut out = String::new();
     let mut chars = s.chars();

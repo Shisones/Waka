@@ -87,7 +87,7 @@ fn db_sync_lines_prints_all_repos_in_given_order() {
 }
 
 #[test]
-fn db_sync_lines_marks_untouched_repo_as_done() {
+fn untouched_repo_shows_full_bar_and_zero_bytes() {
     let mut b: HashMap<String, (i64, i64)> = HashMap::new();
     b.insert("core".into(), (0, 0));
     let lines = db_sync_lines(&b, &["core".to_string()]);
@@ -107,3 +107,5 @@ fn bar_line_clamps_progress_past_total() {
     let line = bar_line("core", 4096, 1024, 4, 7, 80, 0.0);
     assert_eq!(line.chars().filter(|&c| c == '─').count(), 0);
 }
+
+

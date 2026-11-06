@@ -71,8 +71,7 @@ pub fn run_list(handle: &AlpmHandle, installed: bool, upgradable: bool, patterns
         results.sort_by(|a, b| a.1.cmp(&b.1).then(a.0.name().cmp(b.0.name())));
 
         if results.is_empty() {
-            eprintln!(" {}: no packages found", style::yellow("warn"));
-            return Ok(());
+            return Err(anyhow::anyhow!("no packages found"));
         }
 
         for (pkg, repo) in &results {

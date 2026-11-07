@@ -37,8 +37,7 @@ pub fn run(packages: &[String], assume_yes: bool) -> Result<()> {
     }
 
     let local_level = handle.handle.local_file_siglevel();
-    // Copy local archives into a root-only directory before loading them, so
-    // the bytes that get loaded are the bytes that were checked.
+    // Stage local archives so the loaded bytes cannot change.
     let staging = tempfile::tempdir()?;
     let h = &mut handle.handle;
 

@@ -5,7 +5,7 @@ use crate::sys::require_root;
 use anyhow::Result;
 use std::collections::HashSet;
 
-/// True only for a sync database file whose repo is no longer configured.
+/// True for a sync database file whose repo is not configured.
 pub fn unused_sync_db(fname: &str, configured: &HashSet<String>) -> bool {
     for suffix in [".db.sig", ".files.sig", ".db.part", ".files.part", ".db", ".files"] {
         if let Some(repo) = fname.strip_suffix(suffix) {

@@ -47,8 +47,7 @@ pub fn run(assume_yes: bool, autoremove: bool) -> Result<()> {
     }
 
     transaction::trans_init(h, alpm::TransFlag::NONE)?;
-    // Install the question callback before sysupgrade so replacement
-    // questions are not silently declined.
+    // Install the question callback before sysupgrade.
     let title = "Upgrade".to_string();
     let shared = callbacks::callbacks(h, &title, assume_yes);
     h.sync_sysupgrade(false).map_err(|e| anyhow::anyhow!("sysupgrade: {e}"))?;

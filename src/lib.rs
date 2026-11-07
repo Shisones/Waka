@@ -12,8 +12,7 @@ use std::sync::Mutex;
 
 static LOCKFILE: Mutex<Option<String>> = Mutex::new(None);
 
-/// The user declined a prompt. The caller should exit non-zero without
-/// printing another error.
+/// The user declined a prompt. Exit non-zero without another error.
 #[derive(Debug)]
 pub struct Aborted;
 
@@ -83,8 +82,7 @@ pub fn clear_lockfile() {
     }
 }
 
-/// True only when this process created the ALPM lock during a successful
-/// transaction init, so an interrupt never removes another process's lock.
+/// True only when this process created the ALPM lock.
 pub fn owns_lockfile() -> bool {
     LOCKFILE.lock().map(|guard| guard.is_some()).unwrap_or(false)
 }

@@ -106,8 +106,7 @@ pub fn search_lines(rows: &[SearchRow], w: usize) -> Vec<String> {
             crate::display::table::pad(&row.version, version_w, false),
             crate::display::table::pad(&row.size, size_w, true)
         );
-        // Keep the tag on the row when it fits; otherwise it moves to the
-        // description line rather than eating a fixed column on every row.
+        // Move the tag to the description line when it does not fit.
         let tag_inline = row.installed && draw::display_width(&line) + draw::display_width(&tag) <= w;
         if tag_inline {
             line.push_str(&tag);

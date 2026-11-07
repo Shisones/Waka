@@ -75,7 +75,7 @@ pub fn confirmation_unavailable(assume_yes: bool, stdin_is_tty: bool) -> bool {
     !assume_yes && !stdin_is_tty
 }
 
-/// Fail before doing any work instead of silently aborting with exit 0.
+/// Fail before doing any work when a prompt is required but unavailable.
 pub fn require_confirmation_possible(assume_yes: bool) -> anyhow::Result<()> {
     if confirmation_unavailable(assume_yes, std::io::stdin().is_terminal()) {
         return Err(anyhow::anyhow!("cannot prompt without a TTY; pass -y"));
@@ -83,10 +83,7 @@ pub fn require_confirmation_possible(assume_yes: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Bytes to count for one file, capped at the size the transaction reserved
-/// for it. libalpm reports per-transfer counters, and for resumed files the
-/// transferred total can exceed the remaining size it charged to the
-/// transaction.
+/// Bytes charged to the transaction, capped at its size.
 pub fn capped_bytes(raw: i64, cap: Option<i64>) -> i64 {
     let raw = raw.max(0);
     match cap {
@@ -155,8 +152,8 @@ impl DownloadState {
                 if !self.resize.settled(now) {
                     return;
                 }
-                // A reflowed frame cannot be erased by row count, so leave it
-                // and start the next block underneath.
+                // A reflowed frame cannot be erased by row count. Start a new
+                // block.
                 println!();
                 self.rendered = 0;
             }
@@ -196,8 +193,7 @@ impl DownloadState {
 
     pub fn next_phase(&mut self) {
         if self.total_files > 0 {
-            // The final download frame must show the bar complete before the
-            // install phase starts, even if per-file byte accounting lagged.
+            // Show the completed bar before the install phase.
             self.completed_bytes = self.total_bytes;
             self.completed_files = self.total_pkgs.max(self.total_files);
             self.last_render = Instant::now() - std::time::Duration::from_millis(100);
@@ -277,8 +273,7 @@ impl DownloadState {
         out
     }
 
-    /// Bar with the percentage at its end, ETA on the left and the size and
-    /// speed on the right.
+    /// Bar with the percentage on the left; ETA, size, and speed below.
     fn progress_rows(&self, w: usize) -> Vec<String> {
         let pct = if self.total_bytes > 0 {
             (self.completed_bytes as f64 / self.total_bytes as f64 * 100.0).min(100.0)

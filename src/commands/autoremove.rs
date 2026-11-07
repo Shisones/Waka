@@ -34,7 +34,7 @@ pub fn run(assume_yes: bool) -> Result<()> {
     let freed: i64 = orphans.iter().map(|(_, _, size)| *size).sum();
     println!("  {} will be freed", fmt::format_size(freed));
 
-    eprintln!(" {} {} This will remove orphaned packages. This action can delete critical dependencies if they are no longer required.",
+    eprintln!(" {} {} This will remove orphaned packages. It can delete critical dependencies.",
         style::red("WARNING"), style::bold("PROCEED WITH CAUTION"));
 
     if !assume_yes && !render::confirm(&style::bold("\n Do you want to continue? [Y/n] ")) {

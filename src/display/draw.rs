@@ -6,8 +6,7 @@ pub fn term_rows() -> usize {
     termsize::get().map(|s| s.rows as usize).unwrap_or(24)
 }
 
-/// Fit `s` into `max` columns. Escape sequences are copied whole so a cut
-/// string never leaves half an ANSI code behind.
+/// Truncate to `max` columns without splitting escape sequences.
 pub fn truncate(s: &str, max: usize) -> String {
     if display_width(s) <= max {
         return s.to_string();
@@ -46,11 +45,8 @@ pub fn truncate(s: &str, max: usize) -> String {
     out
 }
 
-/// Move up over `lines` rows and clear each one.
-///
-/// The cursor must start on the row directly below the block. Moving before
-/// clearing is what erases the top row; the old order cleared the row being
-/// left, so the first line of every frame survived.
+/// Move up and clear `lines` rows. Clear after moving, or the first row
+/// remains.
 pub fn clear_block(lines: usize) -> String {
     let mut out = String::new();
     for _ in 0..lines {
@@ -116,8 +112,7 @@ fn is_invisible(c: char) -> bool {
         )
 }
 
-/// Replace control, bidi, and zero-width characters so untrusted text cannot
-/// drive or visually reorder the terminal.
+/// Replace control, bidi, and zero-width characters.
 pub fn sanitize(s: &str) -> String {
     s.chars()
         .map(|c| if is_invisible(c) { ' ' } else { c })

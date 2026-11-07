@@ -34,14 +34,14 @@ impl Config {
                     match toml::from_str::<Config>(&contents) {
                         Ok(config) => return Ok(config),
                         Err(e) => {
-                            eprintln!("  {} failed to parse config '{}': {} — skipping", crate::display::style::yellow("warn"), path.display(), e);
+                            eprintln!("  {} failed to parse config '{}': {}; skipping", crate::display::style::yellow("warn"), path.display(), e);
                             continue;
                         }
                     }
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
                 Err(e) => {
-                    eprintln!("  {} failed to read config '{}': {} — skipping", crate::display::style::yellow("warn"), path.display(), e);
+                    eprintln!("  {} failed to read config '{}': {}; skipping", crate::display::style::yellow("warn"), path.display(), e);
                     continue;
                 }
             }

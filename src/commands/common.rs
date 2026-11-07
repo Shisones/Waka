@@ -3,8 +3,7 @@ use crate::display::{render, style};
 use anyhow::Result;
 use std::sync::{Arc, Mutex};
 
-/// libalpm takes the database lock inside sync updates too. Claim it for the
-/// signal handler while that call is running.
+/// Claim the lock while libalpm updates sync databases.
 pub(crate) fn with_db_lock<T>(f: impl FnOnce() -> T) -> T {
     let lock = crate::constants::lock_file();
     if let Some(path) = lock.to_str() {

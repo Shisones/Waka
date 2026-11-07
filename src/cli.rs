@@ -71,7 +71,7 @@ pub enum Command {
     /// List packages (pacman -Qe/Q/Qu)
     #[command()]
     List {
-        /// Include dependencies (show all packages, not just explicit)
+        /// Include dependency packages
         #[arg(short, long)]
         installed: bool,
 

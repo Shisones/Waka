@@ -108,7 +108,7 @@ pub fn bar_line(name: &str, dl: i64, tot: i64, max_nw: usize, max_sw: usize, w: 
     let tail = format!("{} ", padded_size);
     let tail_w = draw::display_width(&tail);
 
-    // Not even the name and size fit: show what there is rather than overflow.
+    // Truncate to fit.
     if name_w + tail_w > w {
         return draw::truncate(&format!("{}{} {}", name, " ".repeat(npad.len()), padded_size), w);
     }

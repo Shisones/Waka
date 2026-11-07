@@ -4,7 +4,7 @@ pub fn root_hint(args: &[String]) -> String {
     if args.is_empty() {
         "this command needs root; run it with sudo".to_string()
     } else {
-        format!("this command needs root; run `sudo waka {}`", args.join(" "))
+        format!("this command needs root; run 'sudo waka {}'", args.join(" "))
     }
 }
 

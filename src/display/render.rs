@@ -196,6 +196,12 @@ impl DownloadState {
 
     pub fn next_phase(&mut self) {
         if self.total_files > 0 {
+            // The final download frame must show the bar complete before the
+            // install phase starts, even if per-file byte accounting lagged.
+            self.completed_bytes = self.total_bytes;
+            self.completed_files = self.total_pkgs.max(self.total_files);
+            self.last_render = Instant::now() - std::time::Duration::from_millis(100);
+            self.render();
             self.rendered = 0;
             println!();
             println!(" {}", style::bold("Done downloading, proceeding with installation"));
@@ -286,7 +292,7 @@ impl DownloadState {
 
         if content_w >= pct_w + 8 {
             let bar = draw::progress_bar(pct, content_w - pct_w - 3);
-            out.push(draw::box_row_w(&format!("[{bar}] {}", style::bold(&pct_s)), w));
+            out.push(draw::box_row_w(&format!("{} [{bar}]", style::bold(&pct_s)), w));
         } else {
             out.push(draw::box_row_w(&style::bold(&pct_s), w));
         }

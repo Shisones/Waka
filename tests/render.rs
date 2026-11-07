@@ -107,15 +107,16 @@ fn current_download_uses_the_package_name() {
 }
 
 #[test]
-fn progress_bar_ends_with_percentage_and_details_split_left_right() {
+fn progress_bar_starts_with_percentage_and_details_split_left_right() {
     let mut s = download_state(512, 2048);
     s.total_files = 1;
     let wide = s.build_at(120, 24);
 
     let bar = wide.iter().find(|l| l.contains('━')).expect("bar row");
     assert_eq!(display_width(bar), 120, "{bar:?}");
-    let bar_text = bar.trim_end_matches('\u{2502}').trim_end();
-    assert!(bar_text.ends_with("25.0%"), "{bar:?}");
+    let bar_text = bar.strip_prefix("\u{2502} ").expect("box prefix");
+    assert!(bar_text.starts_with("25.0%"), "{bar:?}");
+    assert!(bar_text.contains('\u{2501}'), "{bar:?}");
 
     let details = wide.iter().find(|l| l.contains("ETA")).expect("detail row");
     let rest = details.strip_prefix("\u{2502} ").expect("box prefix");

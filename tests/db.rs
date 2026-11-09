@@ -111,12 +111,46 @@ fn bar_line_clamps_progress_past_total() {
 
 
 #[test]
-fn db_size_precedes_the_bar() {
+fn size_sits_on_the_left_of_the_bar() {
     let line = bar_line("core", 0, 0, 4, 3, 80, 100.0);
     let size = line.find("0 B").expect("size");
     let bar = line.find('\u{2501}').expect("bar");
+    assert!(line.starts_with(" core"), "{line:?}");
     assert!(size < bar, "{line:?}");
-    assert!(display_width(&line) <= 80, "{line:?}");
+}
+
+#[test]
+fn bar_and_size_sit_on_the_far_right() {
+    let line = bar_line("core", 0, 0, 4, 3, 80, 100.0);
+    assert!(line.contains("0 B ["), "{line:?}");
+    assert!(line.ends_with("] "), "{line:?}");
+    assert_eq!(display_width(&line), 80, "{line:?}");
+}
+
+#[test]
+fn update_rows_share_the_same_right_edge() {
+    let w = 80;
+    let lines: Vec<String> = ["core", "extra", "multilib"]
+        .iter()
+        .map(|name| bar_line(name, 0, 0, 8, 3, w, 100.0))
+        .collect();
+    let close = |line: &str| {
+        let end = line.rfind(']').expect("bar") + 1;
+        display_width(&line[..end])
+    };
+    let edge = close(&lines[0]);
+    for line in &lines {
+        assert_eq!(close(line), edge, "{line:?}");
+        assert!(line.contains("0 B ["), "{line:?}");
+        assert_eq!(display_width(line), w, "{line:?}");
+    }
+}
+
+#[test]
+fn update_keeps_one_space_of_padding() {
+    let line = bar_line("core", 0, 0, 4, 3, 80, 100.0);
+    assert!(line.ends_with("] "), "{line:?}");
+    assert!(!line.ends_with("]  "), "{line:?}");
 }
 
 #[test]

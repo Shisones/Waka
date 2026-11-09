@@ -104,24 +104,51 @@ pub fn bar_line(name: &str, dl: i64, tot: i64, max_nw: usize, max_sw: usize, w: 
     let padded_size = format!("{:>width$}", size_str, width = max_sw);
     let npad = " ".repeat(max_nw.saturating_sub(draw::display_width(name)));
     let name_prefix = format!(" {}{} ", name, npad);
-    let head = format!("{name_prefix}{padded_size} ");
-    let head_w = draw::display_width(&head);
 
     if w < 3 {
-        return draw::truncate(&head, w);
+        return draw::truncate("[━]", w);
     }
 
-    let max_bar = ((w as f64 * 0.25) as usize).min(50);
-    let bar_space = w.saturating_sub(head_w + 2);
-    let bar_w = bar_space.min(max_bar).max(1);
-    let head = if head_w + bar_w + 2 > w {
-        draw::truncate(&head, w.saturating_sub(bar_w + 2))
+    // The bar and its size stay together on the right edge, with one free
+    // column of padding after the size.
+    let size_w = draw::display_width(&padded_size);
+    let show_size = w >= size_w + 5;
+    let reserved = if show_size {
+        size_w + 5
+    } else if w >= 4 {
+        4
     } else {
-        head
+        3
     };
-    let filled = (((pct / 100.0) * bar_w as f64) as usize).min(bar_w);
-    let bar = format!("{}{}", "━".repeat(filled), "─".repeat(bar_w - filled));
-    format!("{head}[{bar}]")
+    let name_room = w.saturating_sub(reserved);
+    let name_prefix = if draw::display_width(&name_prefix) > name_room {
+        draw::truncate(&name_prefix, name_room)
+    } else {
+        name_prefix
+    };
+    let name_w = draw::display_width(&name_prefix);
+    let max_bar = ((w as f64 * 0.25) as usize).min(50).max(1);
+
+    if show_size {
+        let bar_space = w.saturating_sub(name_w + size_w + 4);
+        let bar_w = bar_space.min(max_bar).max(1);
+        let filled = (((pct / 100.0) * bar_w as f64) as usize).min(bar_w);
+        let bar = format!("{}{}", "━".repeat(filled), "─".repeat(bar_w - filled));
+        let gap = w.saturating_sub(name_w + bar_w + size_w + 4);
+        format!("{name_prefix}{}{padded_size} [{bar}] ", " ".repeat(gap))
+    } else if w >= 4 {
+        let bar_space = w.saturating_sub(name_w + 3);
+        let bar_w = bar_space.min(max_bar).max(1);
+        let filled = (((pct / 100.0) * bar_w as f64) as usize).min(bar_w);
+        let bar = format!("{}{}", "━".repeat(filled), "─".repeat(bar_w - filled));
+        let gap = w.saturating_sub(name_w + bar_w + 3);
+        format!("{name_prefix}{}[{bar}] ", " ".repeat(gap))
+    } else {
+        let bar_w = max_bar.min(w.saturating_sub(2)).max(1);
+        let filled = (((pct / 100.0) * bar_w as f64) as usize).min(bar_w);
+        let bar = format!("{}{}", "━".repeat(filled), "─".repeat(bar_w - filled));
+        format!("[{bar}]")
+    }
 }
 
 pub fn db_sync_lines(bytes: &HashMap<String, (i64, i64)>, names: &[String]) -> Vec<String> {

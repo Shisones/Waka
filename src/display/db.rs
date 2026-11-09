@@ -104,28 +104,24 @@ pub fn bar_line(name: &str, dl: i64, tot: i64, max_nw: usize, max_sw: usize, w: 
     let padded_size = format!("{:>width$}", size_str, width = max_sw);
     let npad = " ".repeat(max_nw.saturating_sub(draw::display_width(name)));
     let name_prefix = format!(" {}{} ", name, npad);
-    let name_w = draw::display_width(&name_prefix);
-    let tail = format!("{} ", padded_size);
-    let tail_w = draw::display_width(&tail);
+    let head = format!("{name_prefix}{padded_size} ");
+    let head_w = draw::display_width(&head);
 
-    // Truncate to fit.
-    if name_w + tail_w > w {
-        return draw::truncate(&format!("{}{} {}", name, " ".repeat(npad.len()), padded_size), w);
+    if w < 3 {
+        return draw::truncate(&head, w);
     }
 
     let max_bar = ((w as f64 * 0.25) as usize).min(50);
-    let bar_space = w.saturating_sub(name_w + tail_w + 2);
-    if bar_space < 10 {
-        let gap = w - name_w - tail_w;
-        return format!("{}{}{}", name_prefix, " ".repeat(gap), tail);
-    }
-
-    let bar_w = bar_space.min(max_bar).max(10).min(bar_space);
+    let bar_space = w.saturating_sub(head_w + 2);
+    let bar_w = bar_space.min(max_bar).max(1);
+    let head = if head_w + bar_w + 2 > w {
+        draw::truncate(&head, w.saturating_sub(bar_w + 2))
+    } else {
+        head
+    };
     let filled = (((pct / 100.0) * bar_w as f64) as usize).min(bar_w);
     let bar = format!("{}{}", "━".repeat(filled), "─".repeat(bar_w - filled));
-    let block = format!("[{}] {}", bar, padded_size);
-    let pad = w.saturating_sub(name_w + draw::display_width(&block));
-    format!("{}{}{}", name_prefix, " ".repeat(pad), block)
+    format!("{head}[{bar}]")
 }
 
 pub fn db_sync_lines(bytes: &HashMap<String, (i64, i64)>, names: &[String]) -> Vec<String> {

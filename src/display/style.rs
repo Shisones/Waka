@@ -3,10 +3,16 @@ use std::sync::OnceLock;
 
 static NO_COLOR: OnceLock<bool> = OnceLock::new();
 
+pub fn colors_enabled(stdout_tty: bool, no_color_env: bool) -> bool {
+    stdout_tty && !no_color_env
+}
+
 fn no_color() -> bool {
     *NO_COLOR.get_or_init(|| {
-        std::env::var("NO_COLOR").is_ok()
-            || !std::io::stdout().is_terminal()
+        !colors_enabled(
+            std::io::stdout().is_terminal(),
+            std::env::var("NO_COLOR").is_ok(),
+        )
     })
 }
 

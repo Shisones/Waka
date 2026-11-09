@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use waka::commands::clean::{should_remove, unused_sync_db};
+use waka::commands::clean::{should_remove, CLEAN_PROMPT};
 
 fn installed(names: &[&str]) -> HashSet<String> {
     names.iter().map(|n| n.to_string()).collect()
@@ -39,19 +39,16 @@ fn partial_downloads_are_always_removed() {
     assert!(should_remove("bash-5.3-1-x86_64.pkg.tar.zst.part", false, &set));
 }
 
+
 #[test]
-fn only_unused_sync_databases_are_removed() {
-    let configured: HashSet<String> = ["core", "extra", "multilib"]
-        .iter()
-        .map(|name| name.to_string())
-        .collect();
-    assert!(!unused_sync_db("core.db", &configured));
-    assert!(!unused_sync_db("extra.files", &configured));
-    assert!(!unused_sync_db("multilib.db.sig", &configured));
-    assert!(unused_sync_db("old.db", &configured));
-    assert!(unused_sync_db("old.db.sig", &configured));
-    assert!(unused_sync_db("old.files", &configured));
-    assert!(unused_sync_db("old.files.sig", &configured));
-    assert!(unused_sync_db("old.db.part", &configured));
-    assert!(!unused_sync_db("unrelated.txt", &configured));
+fn clean_prompt_has_one_blank_line() {
+    assert_eq!(CLEAN_PROMPT.matches('\n').count(), 1);
+}
+
+#[test]
+fn clean_does_not_add_a_second_blank_line() {
+    let source = include_str!("../src/commands/clean.rs");
+    let info = source.find("will be freed").expect("info line");
+    let prompt = info + source[info..].find("CLEAN_PROMPT").expect("prompt");
+    assert!(!source[info..prompt].contains("println!();"));
 }

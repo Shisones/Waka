@@ -107,16 +107,15 @@ fn current_download_uses_the_package_name() {
 }
 
 #[test]
-fn progress_bar_starts_with_percentage_and_details_split_left_right() {
+fn download_percentage_is_on_the_right() {
     let mut s = download_state(512, 2048);
     s.total_files = 1;
     let wide = s.build_at(120, 24);
 
     let bar = wide.iter().find(|l| l.contains('━')).expect("bar row");
     assert_eq!(display_width(bar), 120, "{bar:?}");
-    let bar_text = bar.strip_prefix("\u{2502} ").expect("box prefix");
-    assert!(bar_text.starts_with("25.0%"), "{bar:?}");
-    assert!(bar_text.contains('\u{2501}'), "{bar:?}");
+    let bar_text = bar.trim_end_matches('\u{2502}').trim_end();
+    assert!(bar_text.ends_with("25.0%"), "{bar:?}");
 
     let details = wide.iter().find(|l| l.contains("ETA")).expect("detail row");
     let rest = details.strip_prefix("\u{2502} ").expect("box prefix");
@@ -158,4 +157,36 @@ fn byte_counts_are_capped_at_the_transaction_size() {
     assert_eq!(capped_bytes(150, None), 150);
     assert_eq!(capped_bytes(-5, Some(100)), 0);
     assert_eq!(capped_bytes(50, Some(0)), 0);
+}
+
+#[test]
+fn download_start_keeps_printed_summary_and_prompt() {
+    let mut state = download_state(0, 0);
+    state.rendered = 42;
+    state.prepare_download(2, &[("a".to_string(), 10), ("b".to_string(), 20)]);
+    assert_eq!(state.rendered, 0);
+    assert_eq!(state.total_pkgs, 2);
+    assert_eq!(state.total_bytes, 30);
+}
+
+#[test]
+fn download_finishes_with_a_full_bar() {
+    let mut state = download_state(50, 100);
+    state.total_files = 2;
+    state.total_pkgs = 2;
+    state.complete_download();
+    assert_eq!(state.completed_bytes, 100);
+    assert_eq!(state.completed_files, 2);
+    let lines = state.build_at(100, 24);
+    let bar = lines.iter().find(|line| line.contains('\u{2501}')).expect("bar");
+    assert!(bar.contains("100.0%"), "{bar:?}");
+    assert!(!bar.contains('\u{2500}'), "{bar:?}");
+}
+
+#[test]
+fn upgrade_has_no_prepare_box() {
+    let source = include_str!("../src/commands/upgrade.rs");
+    let start = source.find("callbacks::callbacks").expect("callbacks");
+    let end = source.find("trans_prepare").expect("prepare");
+    assert!(!source[start..end].contains(".render()"), "no render before prepare");
 }

@@ -109,3 +109,24 @@ fn bar_line_clamps_progress_past_total() {
 }
 
 
+
+#[test]
+fn db_size_precedes_the_bar() {
+    let line = bar_line("core", 0, 0, 4, 3, 80, 100.0);
+    let size = line.find("0 B").expect("size");
+    let bar = line.find('\u{2501}').expect("bar");
+    assert!(size < bar, "{line:?}");
+    assert!(display_width(&line) <= 80, "{line:?}");
+}
+
+#[test]
+fn update_bar_is_visible_at_every_width() {
+    for w in 3..=200 {
+        let line = bar_line("core", 0, 0, 4, 3, w, 100.0);
+        assert!(
+            line.contains('\u{2501}') || line.contains('\u{2500}'),
+            "w={w}: {line:?}"
+        );
+        assert!(display_width(&line) <= w, "w={w}: {line:?}");
+    }
+}

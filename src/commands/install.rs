@@ -101,15 +101,13 @@ pub fn run(packages: &[String], assume_yes: bool) -> Result<()> {
         return Err(crate::aborted());
     }
 
+    let sizes: Vec<(String, i64)> = add
+        .iter()
+        .map(|pkg| (pkg.name().to_string(), pkg.download_size()))
+        .collect();
     {
         let mut state = shared.lock().unwrap();
-        state.rendered = 0;
-        state.total_pkgs = add.len();
-        for pkg in add.iter() {
-            let size = pkg.download_size();
-            state.total_bytes += size;
-            state.pkg_sizes.insert(pkg.name().to_string(), size);
-        }
+        state.prepare_download(add.len(), &sizes);
         state.render();
     }
     let commit_result = h.trans_commit();

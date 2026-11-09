@@ -2,6 +2,8 @@ use crate::alpm::handle::AlpmHandle;
 use crate::display::{style, table};
 use anyhow::Result;
 
+pub const UNKNOWN_REPO: &str = "aur";
+
 
 pub fn upgrade_line(repo: &str, name: &str, old: &str, new: &str) -> String {
     format!(
@@ -14,7 +16,7 @@ pub fn upgrade_line(repo: &str, name: &str, old: &str, new: &str) -> String {
 }
 
 fn repo_of(pkg: &alpm::Package) -> &str {
-    pkg.db().map(|db| db.name()).unwrap_or("aur")
+    pkg.db().map(|db| db.name()).unwrap_or(UNKNOWN_REPO)
 }
 
 pub fn run_list(handle: &AlpmHandle, installed: bool, upgradable: bool, patterns: &[String]) -> Result<()> {
@@ -24,7 +26,7 @@ pub fn run_list(handle: &AlpmHandle, installed: bool, upgradable: bool, patterns
         syncdbs.iter()
             .find(|db| db.pkg(pkg.name()).is_ok())
             .map(|db| db.name().to_string())
-            .unwrap_or_else(|| "aur".to_string())
+            .unwrap_or_else(|| UNKNOWN_REPO.to_string())
     }
 
     if upgradable {

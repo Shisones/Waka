@@ -117,6 +117,17 @@ pub struct DownloadState {
 }
 
 impl DownloadState {
+    /// Seed the download counters without erasing lines already printed above
+    /// the box. Call before the first download frame.
+    pub fn prepare_download(&mut self, total_pkgs: usize, packages: &[(String, i64)]) {
+        self.rendered = 0;
+        self.total_pkgs = total_pkgs;
+        for (name, size) in packages {
+            self.total_bytes += *size;
+            self.pkg_sizes.insert(name.clone(), *size);
+        }
+    }
+
     pub fn best_progress(&self) -> Option<String> {
         self.file_to_pkg.keys()
             .filter_map(|fname| {
@@ -191,11 +202,15 @@ impl DownloadState {
         let _ = std::io::stdout().flush();
     }
 
+    pub fn complete_download(&mut self) {
+        self.completed_bytes = self.total_bytes;
+        self.completed_files = self.total_pkgs.max(self.total_files);
+    }
+
     pub fn next_phase(&mut self) {
         if self.total_files > 0 {
             // Show the completed bar before the install phase.
-            self.completed_bytes = self.total_bytes;
-            self.completed_files = self.total_pkgs.max(self.total_files);
+            self.complete_download();
             self.last_render = Instant::now() - std::time::Duration::from_millis(100);
             self.render();
             self.rendered = 0;
@@ -287,7 +302,7 @@ impl DownloadState {
 
         if content_w >= pct_w + 8 {
             let bar = draw::progress_bar(pct, content_w - pct_w - 3);
-            out.push(draw::box_row_w(&format!("{} [{bar}]", style::bold(&pct_s)), w));
+            out.push(draw::box_row_w(&format!("[{bar}] {}", style::bold(&pct_s)), w));
         } else {
             out.push(draw::box_row_w(&style::bold(&pct_s), w));
         }

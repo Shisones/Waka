@@ -41,7 +41,7 @@ fn main() {
     }
 }
 
-/// `v0.1.3-4-gabc1234` -> ("4", "abc1234"). A bare hash has no distance.
+/// `v0.1.6-4-gabc1234` -> ("4", "abc1234"). A bare hash has no distance.
 fn split_describe(s: &str) -> (Option<String>, Option<String>) {
     let mut parts = s.rsplitn(3, '-');
     let last = parts.next().unwrap_or("");

@@ -29,9 +29,7 @@ pub(crate) fn show_upgrade_summary(add: &alpm::AlpmList<&alpm::Package>, rm: &al
         net_upgrade -= pkg.isize();
     }
     table::write_separator();
-    println!(" {} {} \u{00b7} {} {} as dependencies",
-        add.len(), table::plural("upgrade", add.len()),
-        dep_count, table::plural("package", dep_count));
+    println!("{}", count_line(add.len(), dep_count, "upgrade"));
     println!();
     table::write_summary_footer(&[
         ("Total Download Size", &fmt::format_size(total_dl)),
@@ -88,24 +86,21 @@ fn render_install_summary(add: &[&alpm::Package], rm: &[&alpm::Package], explici
         }
     }
 
-    let mut remaining: Vec<&alpm::Package> = add
-        .iter()
-        .copied()
-        .filter(|p| !explicit.iter().any(|e| e == p.name()) && !assigned.contains(p.name()))
-        .collect();
-    remaining.sort_by(|a, b| a.name().cmp(b.name()));
-    for pkg in remaining {
+    let names: Vec<&str> = add.iter().map(|pkg| pkg.name()).collect();
+    for name in remaining_install_names(&names, explicit, &assigned) {
         dep_count += 1;
-        let remaining = remaining_download(pkg, cachedirs);
-        table::write_summary_row(
-            &table::package_cell(pkg.name(), true),
-            "",
-            pkg.version(),
-            &fmt::format_size(pkg.isize()),
-            &fmt::format_size(remaining),
-        );
-        total_dl += remaining;
-        total_isize += pkg.isize();
+        if let Some(pkg) = add.iter().find(|pkg| pkg.name() == name) {
+            let remaining = remaining_download(pkg, cachedirs);
+            table::write_summary_row(
+                &table::package_cell(name, true),
+                "",
+                pkg.version(),
+                &fmt::format_size(pkg.isize()),
+                &fmt::format_size(remaining),
+            );
+            total_dl += remaining;
+            total_isize += pkg.isize();
+        }
     }
 
     let mut total_freed: i64 = 0;
@@ -121,9 +116,7 @@ fn render_install_summary(add: &[&alpm::Package], rm: &[&alpm::Package], explici
     } else {
         table::write_separator();
     }
-    println!(" {} {} \u{00b7} {} {} as dependencies",
-        add.len(), table::plural("package", add.len()),
-        dep_count, table::plural("package", dep_count));
+    println!("{}", count_line(add.len(), dep_count, "package"));
     println!();
     table::write_summary_footer(&[
         ("Total Download Size", &fmt::format_size(total_dl)),
@@ -162,9 +155,88 @@ pub(crate) fn remaining_download(pkg: &alpm::Package, cachedirs: &[String]) -> i
             }
         }
     }
+    remaining_bytes(total, part, complete)
+}
+
+pub(crate) fn count_line(total: usize, dependencies: usize, noun: &str) -> String {
+    if dependencies == 0 {
+        format!(" {} {}", total, table::plural(noun, total))
+    } else {
+        format!(
+            " {} {} \u{00b7} {} {} as dependencies",
+            total,
+            table::plural(noun, total),
+            dependencies,
+            table::plural("package", dependencies)
+        )
+    }
+}
+
+pub(crate) fn remaining_install_names<'a>(
+    names: &[&'a str],
+    explicit: &[String],
+    assigned: &HashSet<String>,
+) -> Vec<&'a str> {
+    let mut remaining: Vec<&str> = names
+        .iter()
+        .copied()
+        .filter(|name| !explicit.iter().any(|e| e == name) && !assigned.contains(*name))
+        .collect();
+    remaining.sort_unstable();
+    remaining
+}
+
+pub(crate) fn remaining_bytes(total: i64, part: u64, complete: bool) -> i64 {
+    if total <= 0 {
+        return total;
+    }
     if complete {
         0
     } else {
         (total - part as i64).max(0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{count_line, remaining_bytes, remaining_install_names};
+    use std::collections::HashSet;
+
+    #[test]
+    fn cached_archive_has_zero_remaining_download() {
+        assert_eq!(remaining_bytes(100, 0, true), 0);
+    }
+
+    #[test]
+    fn partial_archive_subtracts_cached_bytes() {
+        assert_eq!(remaining_bytes(100, 40, false), 60);
+        assert_eq!(remaining_bytes(100, 140, false), 0);
+    }
+
+    #[test]
+    fn uncached_archive_keeps_full_size() {
+        assert_eq!(remaining_bytes(100, 0, false), 100);
+    }
+
+    #[test]
+    fn zero_dependencies_are_not_mentioned() {
+        assert_eq!(count_line(1, 0, "package"), " 1 package");
+    }
+
+    #[test]
+    fn dependencies_are_counted() {
+        assert_eq!(
+            count_line(2, 1, "upgrade"),
+            " 2 upgrades \u{00b7} 1 package as dependencies"
+        );
+    }
+
+    #[test]
+    fn transitive_packages_are_listed() {
+        let names = ["a", "b", "c"];
+        let explicit = vec!["a".to_string()];
+        let mut assigned = HashSet::new();
+        assigned.insert("b".to_string());
+        assert_eq!(remaining_install_names(&names, &explicit, &assigned), vec!["c"]);
     }
 }

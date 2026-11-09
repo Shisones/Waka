@@ -5,6 +5,8 @@ use crate::sys::require_root;
 use anyhow::Result;
 use std::collections::HashSet;
 
+pub const CLEAN_PROMPT: &str = "\n Clear package cache? [Y/n] ";
+
 /// True for a sync database file whose repo is not configured.
 pub fn unused_sync_db(fname: &str, configured: &HashSet<String>) -> bool {
     for suffix in [".db.sig", ".files.sig", ".db.part", ".files.part", ".db", ".files"] {
@@ -107,7 +109,7 @@ pub fn run(all: bool, assume_yes: bool) -> Result<()> {
     println!(" {} {} {} \u{00b7} {} will be freed",
         style::cyan("info"), doomed.len(), table::plural("file", doomed.len()), fmt::format_size(freed));
 
-    if !assume_yes && !render::confirm(&style::bold("\n Clear package cache? [Y/n] ")) {
+    if !assume_yes && !render::confirm(&style::bold(CLEAN_PROMPT)) {
         eprintln!(" {}", style::red("Aborted."));
         return Err(crate::aborted());
     }

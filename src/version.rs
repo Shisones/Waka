@@ -1,6 +1,6 @@
 pub const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// `0.1.2+5.abc1234`, or plain `0.1.2` when the build has no git metadata.
+/// `0.1.6+5.abc1234`, or plain `0.1.6` when the build has no git metadata.
 pub fn full() -> String {
     compose(
         PKG_VERSION,

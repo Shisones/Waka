@@ -47,7 +47,8 @@ pub fn run(assume_yes: bool, autoremove: bool) -> Result<()> {
     }
 
     transaction::trans_init(h, alpm::TransFlag::NONE)?;
-    // Install the question callback before sysupgrade.
+    // Install the question callback before sysupgrade. Do not render before
+    // prepare: the summary and prompt follow the DB bars.
     let title = "Upgrade".to_string();
     let shared = callbacks::callbacks(h, &title, assume_yes);
     h.sync_sysupgrade(false).map_err(|e| anyhow::anyhow!("sysupgrade: {e}"))?;
@@ -58,8 +59,6 @@ pub fn run(assume_yes: bool, autoremove: bool) -> Result<()> {
         println!("{} All packages are up to date", style::green("\u{2713}"));
         return Ok(());
     }
-    shared.lock().unwrap().title = format!("Upgrade ({} packages)", add_count);
-    shared.lock().unwrap().render();
 
     let prep_err = match h.trans_prepare() {
         Ok(_) => None,
@@ -85,15 +84,13 @@ pub fn run(assume_yes: bool, autoremove: bool) -> Result<()> {
         return Err(crate::aborted());
     }
 
+    let sizes: Vec<(String, i64)> = add
+        .iter()
+        .map(|pkg| (pkg.name().to_string(), pkg.download_size()))
+        .collect();
     {
         let mut state = shared.lock().unwrap();
-        state.rendered = 0;
-        state.total_pkgs = add.len();
-        for pkg in add.iter() {
-            let size = pkg.download_size();
-            state.total_bytes += size;
-            state.pkg_sizes.insert(pkg.name().to_string(), size);
-        }
+        state.prepare_download(add.len(), &sizes);
         state.render();
     }
     let commit_result = h.trans_commit();

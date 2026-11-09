@@ -34,3 +34,10 @@ fn installed_package_does_not_report_zero_download_size() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(!stdout.contains("Download Size: 0 B"), "{stdout}");
 }
+
+#[test]
+fn root_hint_has_no_markdown() {
+    let hint = waka::sys::root_hint(&["upgrade".to_string()]);
+    assert!(!hint.contains('`'), "{hint}");
+    assert!(hint.contains("'sudo waka upgrade'"), "{hint}");
+}

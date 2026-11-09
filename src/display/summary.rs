@@ -1,4 +1,4 @@
-use crate::display::{format as fmt, style, table};
+use crate::display::{draw, format as fmt, style, table};
 use std::collections::HashSet;
 
 pub(crate) fn show_upgrade_summary(add: &alpm::AlpmList<&alpm::Package>, rm: &alpm::AlpmList<&alpm::Package>, local: &alpm::Db, cachedirs: &[String]) {
@@ -15,17 +15,17 @@ pub(crate) fn show_upgrade_summary(add: &alpm::AlpmList<&alpm::Package>, rm: &al
             dep_count += 1;
         }
         let old = local.pkg(pkg.name()).ok();
-        let old_ver = old.map(|o| o.version().to_string()).unwrap_or_default();
+        let old_ver = old.map(|o| draw::sanitize(o.version().as_str())).unwrap_or_default();
         let old_size = old.map(|o| o.isize()).unwrap_or(0);
         let net_change = pkg.isize() - old_size;
         let remaining = remaining_download(pkg, cachedirs);
-        table::write_summary_row(&table::package_cell(pkg.name(), dependency), &old_ver, pkg.version(), &fmt::format_size(net_change), &fmt::format_size(remaining));
+        table::write_summary_row(&table::package_cell(pkg.name(), dependency), &old_ver, &draw::sanitize(pkg.version().as_str()), &fmt::format_size(net_change), &fmt::format_size(remaining));
         total_dl += remaining;
         total_isize += pkg.isize();
         net_upgrade += net_change;
     }
     for pkg in rm.iter() {
-        table::write_summary_row(&style::red(pkg.name()), pkg.version(), "", &fmt::format_size(-pkg.isize()), "0 B");
+        table::write_summary_row(&style::red(&draw::sanitize(pkg.name())), &draw::sanitize(pkg.version().as_str()), "", &fmt::format_size(-pkg.isize()), "0 B");
         net_upgrade -= pkg.isize();
     }
     table::write_separator();
@@ -59,7 +59,7 @@ fn render_install_summary(add: &[&alpm::Package], rm: &[&alpm::Package], explici
 
     for pkg in &explicit_pkgs {
         let remaining = remaining_download(pkg, cachedirs);
-        table::write_summary_row(&table::package_cell(pkg.name(), false), "", pkg.version(), &fmt::format_size(pkg.isize()), &fmt::format_size(remaining));
+        table::write_summary_row(&table::package_cell(pkg.name(), false), "", &draw::sanitize(pkg.version().as_str()), &fmt::format_size(pkg.isize()), &fmt::format_size(remaining));
         total_dl += remaining;
         total_isize += pkg.isize();
 
@@ -79,7 +79,7 @@ fn render_install_summary(add: &[&alpm::Package], rm: &[&alpm::Package], explici
             dep_count += 1;
             if let Some(dep) = add.iter().find(|p| p.name() == name) {
                 let remaining = remaining_download(dep, cachedirs);
-                table::write_summary_row(&table::package_cell(name, true), "", dep.version(), &fmt::format_size(dep.isize()), &fmt::format_size(remaining));
+                table::write_summary_row(&table::package_cell(name, true), "", &draw::sanitize(dep.version().as_str()), &fmt::format_size(dep.isize()), &fmt::format_size(remaining));
                 total_dl += remaining;
                 total_isize += dep.isize();
             }
@@ -94,7 +94,7 @@ fn render_install_summary(add: &[&alpm::Package], rm: &[&alpm::Package], explici
             table::write_summary_row(
                 &table::package_cell(name, true),
                 "",
-                pkg.version(),
+                &draw::sanitize(pkg.version().as_str()),
                 &fmt::format_size(pkg.isize()),
                 &fmt::format_size(remaining),
             );
@@ -109,7 +109,7 @@ fn render_install_summary(add: &[&alpm::Package], rm: &[&alpm::Package], explici
         table::write_summary_row(&style::bold("Package"), &style::bold("Old Ver"), &style::bold("New Ver"), &style::bold("Net Change"), &style::bold("Size"));
         table::write_separator();
         for pkg in rm {
-            table::write_summary_row(&style::red(pkg.name()), pkg.version(), "", &fmt::format_size(-pkg.isize()), "0 B");
+            table::write_summary_row(&style::red(&draw::sanitize(pkg.name())), &draw::sanitize(pkg.version().as_str()), "", &fmt::format_size(-pkg.isize()), "0 B");
             total_freed += pkg.isize();
         }
         table::write_separator();

@@ -4,3 +4,4 @@
 /src/waka-*/
 /*.pkg.tar.zst
 /*.pkg.tar.zst.sig
+/notes/

@@ -91,7 +91,8 @@ pub fn write_summary_footer(items: &[(&str, &str)]) {
 }
 
 pub fn package_cell(name: &str, dependency: bool) -> String {
-    let styled = crate::display::style::green(name);
+    let name = display::draw::sanitize(name);
+    let styled = crate::display::style::green(&name);
     if dependency { format!(" {styled}") } else { styled }
 }
 

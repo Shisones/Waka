@@ -36,12 +36,12 @@ fn print_pkg_info(pkg: &alpm::Package, num: usize) {
         println!();
     }
 
-    let name = pkg.name();
-    let version = pkg.version().as_str();
-    let desc = pkg.desc().unwrap_or("(no description)");
-    let url = pkg.url().unwrap_or("");
-    let arch = pkg.arch().unwrap_or("unknown");
-    let licenses: Vec<&str> = pkg.licenses().iter().collect();
+    let name = draw::sanitize(pkg.name());
+    let version = draw::sanitize(pkg.version().as_str());
+    let desc = draw::sanitize(pkg.desc().unwrap_or("(no description)"));
+    let url = draw::sanitize(pkg.url().unwrap_or(""));
+    let arch = draw::sanitize(pkg.arch().unwrap_or("unknown"));
+    let licenses: Vec<String> = pkg.licenses().iter().map(|l| draw::sanitize(l)).collect();
     let install_date_str = pkg.install_date().map(|ts| {
         chrono::DateTime::from_timestamp(ts, 0)
             .map(|dt| dt.format("%a %d %b %Y %H:%M:%S UTC").to_string())
@@ -49,8 +49,8 @@ fn print_pkg_info(pkg: &alpm::Package, num: usize) {
     });
     let build = pkg.build_date();
 
-    lines.push(format!("{} {}", style::color("Package:", style::Color::Green), style::color(name, style::Color::Green)));
-    lines.push(format!("{} {}", style::color("Version:", style::Color::Blue), style::color(version, style::Color::Blue)));
+    lines.push(format!("{} {}", style::color("Package:", style::Color::Green), style::color(&name, style::Color::Green)));
+    lines.push(format!("{} {}", style::color("Version:", style::Color::Blue), style::color(&version, style::Color::Blue)));
     lines.push(format!("{} {}", style::bold("Architecture:"), arch));
     if let Some(dt) = &install_date_str {
         lines.push(format!("{} {}", style::bold("Install Date:"), dt));
@@ -65,10 +65,10 @@ fn print_pkg_info(pkg: &alpm::Package, num: usize) {
     let depends: Vec<String> = deps_to_strings(pkg.depends());
     add_deps(&mut lines, &style::bold("Depends:").to_string(), &depends);
 
-    let required_by: Vec<String> = pkg.required_by().iter().map(|s| s.to_string()).collect();
+    let required_by: Vec<String> = pkg.required_by().iter().map(|s| draw::sanitize(s)).collect();
     add_deps(&mut lines, &style::bold("Required By:").to_string(), &required_by);
 
-    let optional_for: Vec<String> = pkg.optional_for().iter().map(|s| s.to_string()).collect();
+    let optional_for: Vec<String> = pkg.optional_for().iter().map(|s| draw::sanitize(s)).collect();
     add_deps(&mut lines, &style::bold("Optional For:").to_string(), &optional_for);
 
     let conflicts: Vec<String> = deps_to_strings(pkg.conflicts());
@@ -122,6 +122,7 @@ fn dep_lines(deps: &[String]) -> Vec<String> {
 }
 
 pub fn format_maintainer(raw: &str) -> String {
+    let raw = draw::sanitize(raw);
     if let Some(open) = raw.find('<') {
         let close = raw[open + 1..]
             .find('>')
@@ -140,14 +141,14 @@ fn deps_to_strings(deps: alpm::AlpmList<&alpm::Dep>) -> Vec<String> {
     let mut v: Vec<String> = deps
         .iter()
         .map(|d| {
-            let name = d.name();
+            let name = draw::sanitize(d.name());
             match (d.version(), d.depmod()) {
-                (Some(ver), alpm::DepMod::Eq) => format!("{name}={}", ver.as_str()),
-                (Some(ver), alpm::DepMod::Ge) => format!("{name}>={}", ver.as_str()),
-                (Some(ver), alpm::DepMod::Le) => format!("{name}<={}", ver.as_str()),
-                (Some(ver), alpm::DepMod::Gt) => format!("{name}>{}", ver.as_str()),
-                (Some(ver), alpm::DepMod::Lt) => format!("{name}<{}", ver.as_str()),
-                _ => name.to_string(),
+                (Some(ver), alpm::DepMod::Eq) => format!("{name}={}", draw::sanitize(ver.as_str())),
+                (Some(ver), alpm::DepMod::Ge) => format!("{name}>={}", draw::sanitize(ver.as_str())),
+                (Some(ver), alpm::DepMod::Le) => format!("{name}<={}", draw::sanitize(ver.as_str())),
+                (Some(ver), alpm::DepMod::Gt) => format!("{name}>{}", draw::sanitize(ver.as_str())),
+                (Some(ver), alpm::DepMod::Lt) => format!("{name}<{}", draw::sanitize(ver.as_str())),
+                _ => name,
             }
         })
         .collect();

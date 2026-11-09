@@ -1,7 +1,7 @@
 use crate::alpm::{callbacks, handle::AlpmHandle, transaction};
 use crate::commands::common::{commit_epilogue, detail_from_prep_err};
 use crate::config::Config;
-use crate::display::{format as fmt, render, style, table};
+use crate::display::{draw, format as fmt, render, style, table};
 use crate::sys::require_root;
 use anyhow::Result;
 
@@ -53,6 +53,10 @@ pub fn run(packages: &[String], assume_yes: bool) -> Result<()> {
         return Err(anyhow::anyhow!("{}", msg));
     }
 
+    // Do not let the commit log erase the summary that is printed next. The
+    // prepare box stays on screen; only its row count is reset.
+    shared.lock().unwrap().rendered = 0;
+
     let rm = h.trans_remove();
     if let Some(held) = rm
         .iter()
@@ -74,7 +78,7 @@ pub fn run(packages: &[String], assume_yes: bool) -> Result<()> {
         if pkg.reason() == alpm::PackageReason::Depend {
             dep_count += 1;
         }
-        table::write_summary_row(&style::red(pkg.name()), pkg.version(), "", &fmt::format_size(-pkg.isize()), "0 B");
+        table::write_summary_row(&style::red(&draw::sanitize(pkg.name())), &draw::sanitize(pkg.version().as_str()), "", &fmt::format_size(-pkg.isize()), "0 B");
         total_freed += pkg.isize();
     }
     table::write_separator();
@@ -98,6 +102,7 @@ pub fn run(packages: &[String], assume_yes: bool) -> Result<()> {
         let mut state = shared.lock().unwrap();
         state.log.push(format!("{}...", style::cyan("Removing packages")));
     }
+    transaction::begin_commit(h);
     let commit_result = h.trans_commit();
     commit_epilogue(&shared, h, commit_result, "Downloading packages")?;
     Ok(())

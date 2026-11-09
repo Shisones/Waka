@@ -36,6 +36,16 @@ fn installed_package_does_not_report_zero_download_size() {
 }
 
 #[test]
+fn assume_yes_accepts_short_and_long_flags() {
+    let output = Command::new(env!("CARGO_BIN_EXE_waka"))
+        .args(["install", "--help"])
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(text.contains("-y, --assume-yes"), "{text}");
+}
+
+#[test]
 fn root_hint_has_no_markdown() {
     let hint = waka::sys::root_hint(&["upgrade".to_string()]);
     assert!(!hint.contains('`'), "{hint}");

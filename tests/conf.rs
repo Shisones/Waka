@@ -46,10 +46,33 @@ fn pacman_token_names_are_understood() {
 }
 
 #[test]
+fn never_does_not_discard_later_tokens() {
+    let level = parse_siglevel("Never DatabaseRequired");
+    assert!(!level.contains(SigLevel::PACKAGE));
+    assert!(level.contains(SigLevel::DATABASE));
+}
+
+#[test]
+fn package_never_only_clears_packages() {
+    let level = parse_siglevel("PackageNever");
+    assert!(!level.contains(SigLevel::PACKAGE));
+    assert!(level.contains(SigLevel::DATABASE));
+}
+
+#[test]
+fn database_never_only_clears_databases() {
+    let level = parse_siglevel("DatabaseNever");
+    assert!(level.contains(SigLevel::PACKAGE));
+    assert!(!level.contains(SigLevel::DATABASE));
+}
+
+#[test]
 fn repo_level_applies_on_top_of_global() {
     let global = apply_siglevel(default_siglevel(), "Required DatabaseOptional");
     let repo = apply_siglevel(global, "PackageRequired");
     assert!(repo.contains(SigLevel::PACKAGE));
     assert!(repo.contains(SigLevel::DATABASE_OPTIONAL));
-    assert_eq!(apply_siglevel(global, "Never"), SigLevel::NONE);
+    let never = apply_siglevel(global, "Never");
+    assert!(!never.contains(SigLevel::PACKAGE));
+    assert!(!never.contains(SigLevel::DATABASE));
 }

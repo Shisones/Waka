@@ -1,7 +1,7 @@
 use crate::alpm::{callbacks, handle::AlpmHandle, transaction};
 use crate::commands::common::{commit_epilogue, detail_from_prep_err};
 use crate::config::Config;
-use crate::display::{format as fmt, render, style, table};
+use crate::display::{draw, format as fmt, render, style, table};
 use crate::sys::require_root;
 use anyhow::Result;
 
@@ -29,7 +29,7 @@ pub fn run(assume_yes: bool) -> Result<()> {
 
     eprintln!(" {} {} {}", style::yellow("warn"), orphans.len(), table::plural("orphaned package", orphans.len()));
     for (name, ver, _) in &orphans {
-        println!("  {} ({})", style::red(name), style::dim(ver));
+        println!("  {} ({})", style::red(&draw::sanitize(name)), style::dim(&draw::sanitize(ver)));
     }
     let freed: i64 = orphans.iter().map(|(_, _, size)| *size).sum();
     println!("  {} will be freed", fmt::format_size(freed));
@@ -89,7 +89,7 @@ pub fn run(assume_yes: bool) -> Result<()> {
         println!();
         println!(" Additional packages will be removed:");
         for name in &extras {
-            println!("  {}", style::red(name));
+            println!("  {}", style::red(&draw::sanitize(name)));
         }
         if !render::confirm(&style::bold("\n Remove them too? [Y/n] ")) {
             transaction::end_trans(h);
@@ -102,6 +102,7 @@ pub fn run(assume_yes: bool) -> Result<()> {
         let mut state = shared.lock().unwrap();
         state.log.push(format!("{}...", style::cyan("Removing orphaned packages")));
     }
+    transaction::begin_commit(h);
     let commit_result = h.trans_commit();
     commit_epilogue(&shared, h, commit_result, "Removing orphaned packages")?;
     Ok(())

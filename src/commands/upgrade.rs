@@ -45,6 +45,7 @@ pub fn run(assume_yes: bool, autoremove: bool) -> Result<()> {
             println!("{line}");
         }
     }
+    println!();
 
     transaction::trans_init(h, alpm::TransFlag::NONE)?;
     // Install the question callback before sysupgrade. Do not render before
@@ -93,6 +94,7 @@ pub fn run(assume_yes: bool, autoremove: bool) -> Result<()> {
         state.prepare_download(add.len(), &sizes);
         state.render();
     }
+    transaction::begin_commit(h);
     let commit_result = h.trans_commit();
     commit_epilogue(&shared, h, commit_result, "Downloading packages")?;
 

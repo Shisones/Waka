@@ -11,23 +11,29 @@ pub fn interrupt_active() -> bool {
     if ptr.is_null() {
         return false;
     }
-    // libalpm's interrupt is a flag. Call it from the signal thread.
-    INTERRUPTED.store(true, Ordering::SeqCst);
-    unsafe {
-        let _ = (*ptr).trans_interrupt();
+    // libalpm only accepts an interrupt while committing. If it rejects the
+    // interrupt, let the handler exit instead of swallowing Ctrl-C.
+    let interrupted = unsafe { (*ptr).trans_interrupt().is_ok() };
+    if interrupted {
+        INTERRUPTED.store(true, Ordering::SeqCst);
     }
-    true
+    interrupted
 }
 
 pub fn trans_init(h: &mut alpm::Alpm, flags: alpm::TransFlag) -> anyhow::Result<()> {
     INTERRUPTED.store(false, Ordering::SeqCst);
     h.trans_init(flags).map_err(|e| anyhow::anyhow!("init transaction: {e}"))?;
     // Claim the lock only after libalpm creates it.
-    ACTIVE.store(h as *mut alpm::Alpm, Ordering::SeqCst);
     let lock = crate::constants::lock_file();
     let lock_str = lock.to_str().context("lock file path contains non-UTF8 characters")?;
     crate::set_lockfile(lock_str);
     Ok(())
+}
+
+/// Publish the handle only once commit starts. Prepare-phase errors must not
+/// leave `ACTIVE` pointing at a handle that is about to be dropped.
+pub fn begin_commit(h: &mut alpm::Alpm) {
+    ACTIVE.store(h as *mut alpm::Alpm, Ordering::SeqCst);
 }
 
 pub fn was_interrupted() -> bool {

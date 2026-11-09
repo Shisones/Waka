@@ -29,7 +29,8 @@ pub fn format_speed(bps: f64) -> String {
 }
 
 pub fn formatted_version(v: &alpm::Ver) -> String {
-    format!("({})", style::color(v.as_str(), style::Color::Blue))
+    let v = crate::display::draw::sanitize(v.as_str());
+    format!("({})", style::color(&v, style::Color::Blue))
 }
 
 pub fn pick_unit(total: i64) -> (i64, &'static str) {

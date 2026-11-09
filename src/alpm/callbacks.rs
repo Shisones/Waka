@@ -102,11 +102,19 @@ pub fn callbacks(handle: &alpm::Alpm, title: &str, assume_yes: bool) -> Arc<Mute
                 if !state.phase { state.next_phase(); }
                 state.phase = true;
                 let (label, msg) = match op.operation() {
-                    PackageOperation::Install(p) => (style::green("Installing:"), format!("{} {}", p.name(), fmt::formatted_version(p.version()))),
-                    PackageOperation::Upgrade(n, o) => (style::green("Upgrading:"), format!("{} {} -> {}", n.name(), o.version(), n.version())),
-                    PackageOperation::Reinstall(n, _) => (style::green("Reinstalling:"), format!("{} {}", n.name(), fmt::formatted_version(n.version()))),
-                    PackageOperation::Downgrade(n, o) => (style::yellow("Downgrading:"), format!("{} {} -> {}", n.name(), o.version(), n.version())),
-                    PackageOperation::Remove(p) => (style::red("Removing:"), format!("{} {}", p.name(), fmt::formatted_version(p.version()))),
+                    PackageOperation::Install(p) => (style::green("Installing:"), format!("{} {}", draw::sanitize(p.name()), fmt::formatted_version(p.version()))),
+                    PackageOperation::Upgrade(n, o) => {
+                        let old = draw::sanitize(o.version().as_str());
+                        let new = draw::sanitize(n.version().as_str());
+                        (style::green("Upgrading:"), format!("{} {old} -> {new}", draw::sanitize(n.name())))
+                    }
+                    PackageOperation::Reinstall(n, _) => (style::green("Reinstalling:"), format!("{} {}", draw::sanitize(n.name()), fmt::formatted_version(n.version()))),
+                    PackageOperation::Downgrade(n, o) => {
+                        let old = draw::sanitize(o.version().as_str());
+                        let new = draw::sanitize(n.version().as_str());
+                        (style::yellow("Downgrading:"), format!("{} {old} -> {new}", draw::sanitize(n.name())))
+                    }
+                    PackageOperation::Remove(p) => (style::red("Removing:"), format!("{} {}", draw::sanitize(p.name()), fmt::formatted_version(p.version()))),
                 };
                 state.log.push(format!("{} {}", label, msg));
                 state.render();

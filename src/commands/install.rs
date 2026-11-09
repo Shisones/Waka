@@ -68,6 +68,15 @@ pub fn run(packages: &[String], assume_yes: bool) -> Result<()> {
         let staged = staging.path().join(format!("{index}-{name}"));
         std::fs::copy(source, &staged)
             .map_err(|e| anyhow::anyhow!("cannot stage '{path}': {e}"))?;
+        let mut sig = source.as_os_str().to_os_string();
+        sig.push(".sig");
+        let sig = std::path::PathBuf::from(sig);
+        if sig.is_file() {
+            let mut staged_sig = staged.as_os_str().to_os_string();
+            staged_sig.push(".sig");
+            std::fs::copy(&sig, std::path::PathBuf::from(staged_sig))
+                .map_err(|e| anyhow::anyhow!("cannot stage '{}.sig': {e}", sig.display()))?;
+        }
         let staged = staged
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("staged path is not UTF-8"))?;
@@ -110,6 +119,7 @@ pub fn run(packages: &[String], assume_yes: bool) -> Result<()> {
         state.prepare_download(add.len(), &sizes);
         state.render();
     }
+    transaction::begin_commit(h);
     let commit_result = h.trans_commit();
     commit_epilogue(&shared, h, commit_result, "Downloading packages")?;
     Ok(())

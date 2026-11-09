@@ -1,17 +1,21 @@
 use crate::alpm::handle::AlpmHandle;
-use crate::display::{style, table};
+use crate::display::{draw, style, table};
 use anyhow::Result;
 
 pub const UNKNOWN_REPO: &str = "aur";
 
 
 pub fn upgrade_line(repo: &str, name: &str, old: &str, new: &str) -> String {
+    let repo = draw::sanitize(repo);
+    let name = draw::sanitize(name);
+    let old = draw::sanitize(old);
+    let new = draw::sanitize(new);
     format!(
         " {}/{} {} \u{2192} {}",
-        style::bold(repo),
-        style::color(name, style::Color::Green),
-        style::color(old, style::Color::Blue),
-        style::color(new, style::Color::Blue),
+        style::bold(&repo),
+        style::color(&name, style::Color::Green),
+        style::color(&old, style::Color::Blue),
+        style::color(&new, style::Color::Blue),
     )
 }
 
@@ -77,8 +81,10 @@ pub fn run_list(handle: &AlpmHandle, installed: bool, upgradable: bool, patterns
         }
 
         for (pkg, repo) in &results {
-            let version = pkg.version();
-            println!(" {}/{} {}", style::bold(repo), style::color(pkg.name(), style::Color::Green), style::color(version.as_str(), style::Color::Blue));
+            let name = draw::sanitize(pkg.name());
+            let version = draw::sanitize(pkg.version().as_str());
+            let repo = draw::sanitize(repo);
+            println!(" {}/{} {}", style::bold(&repo), style::color(&name, style::Color::Green), style::color(&version, style::Color::Blue));
         }
         println!(" {} {} {} found.", style::green("\u{2713}"), results.len(), table::plural("package", results.len()));
     }

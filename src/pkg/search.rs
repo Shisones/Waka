@@ -39,15 +39,18 @@ pub fn search_packages(handle: &AlpmHandle, terms: &[String]) -> Result<()> {
         .iter()
         .map(|(pkg, repo)| {
             let size = crate::display::format::format_size(pkg.size());
+            let name = draw::sanitize(pkg.name());
+            let version = draw::sanitize(pkg.version().as_str());
+            let repo = draw::sanitize(repo);
             SearchRow {
-                label: format!("{}/{}", style::bold(repo), style::color(pkg.name(), style::Color::Green)),
-                width: draw::display_width(repo) + 1 + draw::display_width(pkg.name()),
-                version: style::color(pkg.version(), style::Color::Blue),
-                version_width: draw::display_width(pkg.version()),
+                label: format!("{}/{}", style::bold(&repo), style::color(&name, style::Color::Green)),
+                width: draw::display_width(&repo) + 1 + draw::display_width(&name),
+                version: style::color(&version, style::Color::Blue),
+                version_width: draw::display_width(&version),
                 size_width: draw::display_width(&size),
                 size: style::dim(&size),
                 installed: handle.find_local_pkg(pkg.name()).is_some(),
-                desc: pkg.desc().unwrap_or("").to_string(),
+                desc: draw::sanitize(pkg.desc().unwrap_or("")),
             }
         })
         .collect();
@@ -112,11 +115,12 @@ pub fn search_lines(rows: &[SearchRow], w: usize) -> Vec<String> {
             line.push_str(&tag);
         }
         out.push(draw::truncate(&line, w));
-        if !row.desc.is_empty() {
+        let desc = draw::sanitize(&row.desc);
+        if !desc.is_empty() {
             let desc = if row.installed && !tag_inline {
-                format!("   {} {}", tag.trim_start(), row.desc)
+                format!("   {} {}", tag.trim_start(), desc)
             } else {
-                format!("   {}", row.desc)
+                format!("   {desc}")
             };
             out.push(draw::truncate(&desc, w));
         }

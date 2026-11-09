@@ -21,7 +21,9 @@ pub fn apply_siglevel(mut level: SigLevel, val: &str) -> SigLevel {
     let database_trust = SigLevel::DATABASE_MARGINAL_OK | SigLevel::DATABASE_UNKNOWN_OK;
     for part in val.split_whitespace() {
         match part {
-            "Never" => return SigLevel::NONE,
+            "Never" => level.remove(SigLevel::PACKAGE | SigLevel::DATABASE),
+            "PackageNever" => level.remove(SigLevel::PACKAGE),
+            "DatabaseNever" => level.remove(SigLevel::DATABASE),
             "Optional" => {
                 level |= SigLevel::PACKAGE
                     | SigLevel::PACKAGE_OPTIONAL

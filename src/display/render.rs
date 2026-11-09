@@ -13,8 +13,8 @@ pub fn pkg_name_from_filename(fname: &str) -> String {
     let base = fname.split(".pkg.tar.").next().unwrap_or(fname);
     let mut parts: Vec<&str> = base.rsplitn(4, '-').collect();
     parts.reverse();
-    if parts.is_empty() { return base.to_string(); }
-    parts[0].to_string()
+    if parts.is_empty() { return draw::sanitize(base); }
+    draw::sanitize(parts[0])
 }
 
 pub fn confirm(prompt: &str) -> bool {
@@ -265,7 +265,7 @@ impl DownloadState {
                 body.push(draw::box_row_w(&format!("{} {}", style::green("Completed:"), name), w));
             }
             if let Some(fname) = &self.currently_downloading {
-                let name = self.file_to_pkg.get(fname).map(String::as_str).unwrap_or(fname.as_str());
+                let name = self.file_to_pkg.get(fname).cloned().unwrap_or_else(|| draw::sanitize(fname));
                 body.push(draw::box_row_w(&format!("{} {}", style::cyan("Downloading:"), name), w));
             } else if self.completed_downloads.is_empty() {
                 body.push(draw::box_row_w(&style::cyan("Starting Downloads..."), w));

@@ -41,6 +41,15 @@ fn partial_downloads_are_always_removed() {
 
 
 #[test]
+fn ignores_files_that_are_not_package_archives() {
+    let set = installed(&[]);
+    assert!(!should_remove("notes.txt", false, &set));
+    assert!(!should_remove("notes.txt", true, &set));
+    assert!(!should_remove("source-1.0-1.src.tar.gz", false, &set));
+    assert!(!should_remove("core.files", false, &set));
+}
+
+#[test]
 fn clean_prompt_has_one_blank_line() {
     assert_eq!(CLEAN_PROMPT.matches('\n').count(), 1);
 }

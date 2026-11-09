@@ -1,6 +1,20 @@
 use crate::constants;
-use crate::display::style;
+use crate::display::{draw, style};
 use anyhow::Result;
+
+/// Lines belonging to one transaction, starting at `txn_line` and stopping at
+/// the next transaction.
+pub fn transaction_lines<'a>(entries: &'a [String], txn_line: &str) -> Vec<&'a str> {
+    let start = entries.iter().position(|line| line.as_str() == txn_line).unwrap_or(0);
+    let mut out = Vec::new();
+    for line in entries.iter().skip(start) {
+        if line.contains("transaction started") && line.as_str() != txn_line {
+            break;
+        }
+        out.push(line.as_str());
+    }
+    out
+}
 
 pub fn run(id: Option<String>) -> Result<()> {
     let log_path = constants::pacman_log();
@@ -43,13 +57,9 @@ pub fn run(id: Option<String>) -> Result<()> {
         let txn_time = txn_line.trim_start_matches('[').split(']').next().unwrap_or("");
         println!(" {} {}", style::bold("Transaction"), idx);
         println!(" {}", style::dim(txn_time));
-        for line in &entries {
-            if line.contains("[ALPM]") && line.as_str() >= txn_line {
-                if line.contains("transaction started") && line != txn_line {
-                    break;
-                }
-                println!(" {}", line.trim_start_matches('[').split_once(']').map(|x| x.1).unwrap_or("").trim());
-            }
+        for line in transaction_lines(&entries, txn_line) {
+            let text = line.trim_start_matches('[').split_once(']').map(|x| x.1).unwrap_or("").trim();
+            println!(" {}", draw::sanitize(text));
         }
     } else {
         let mut count = 0;
@@ -63,7 +73,7 @@ pub fn run(id: Option<String>) -> Result<()> {
             if line.contains("transaction started") {
                 count += 1;
                 let date_str = line.trim_start_matches('[').split(']').next().unwrap_or("");
-                println!(" {}  {} {}", style::bold(&format!("{:>3}", count)), style::dim(date_str), line.split("[ALPM] ").nth(1).unwrap_or(""));
+                println!(" {}  {} {}", style::bold(&format!("{:>3}", count)), style::dim(date_str), draw::sanitize(line.split("[ALPM] ").nth(1).unwrap_or("")));
             }
         }
         println!();

@@ -20,7 +20,7 @@ pub enum Command {
         autoremove: bool,
 
         /// Assume yes to all prompts
-        #[arg(short, long)]
+        #[arg(short = 'y', long = "assume-yes")]
         assume_yes: bool,
     },
 
@@ -31,7 +31,7 @@ pub enum Command {
         packages: Vec<String>,
 
         /// Assume yes to all prompts
-        #[arg(short, long)]
+        #[arg(short = 'y', long = "assume-yes")]
         assume_yes: bool,
     },
 
@@ -42,7 +42,7 @@ pub enum Command {
         packages: Vec<String>,
 
         /// Assume yes to all prompts
-        #[arg(short, long)]
+        #[arg(short = 'y', long = "assume-yes")]
         assume_yes: bool,
     },
 
@@ -50,7 +50,7 @@ pub enum Command {
     #[command()]
     Autoremove {
         /// Assume yes to all prompts
-        #[arg(short, long)]
+        #[arg(short = 'y', long = "assume-yes")]
         assume_yes: bool,
     },
 
@@ -91,7 +91,7 @@ pub enum Command {
         all: bool,
 
         /// Assume yes to all prompts
-        #[arg(short, long)]
+        #[arg(short = 'y', long = "assume-yes")]
         assume_yes: bool,
     },
 

@@ -1,6 +1,6 @@
 use crate::alpm::handle::AlpmHandle;
 use crate::constants;
-use crate::display::{format as fmt, render, style, table};
+use crate::display::{draw, format as fmt, render, style, table};
 use crate::sys::require_root;
 use anyhow::Result;
 use std::collections::HashSet;
@@ -18,19 +18,19 @@ pub fn unused_sync_db(fname: &str, configured: &HashSet<String>) -> bool {
 }
 
 pub fn should_remove(fname: &str, all: bool, installed: &HashSet<String>) -> bool {
-    if fname.ends_with(".part") {
-        return true;
-    }
     if fname.ends_with(".db") || fname.ends_with(".db.sig") {
         return all;
     }
     if let Some(base) = fname.strip_suffix(".sig") {
         return should_remove(base, all, installed);
     }
-    let base = match fname.split(".pkg.tar.").next() {
-        Some(base) => base,
-        None => return false,
-    };
+    if !fname.contains(".pkg.tar.") {
+        return false;
+    }
+    if fname.ends_with(".part") {
+        return true;
+    }
+    let base = fname.split(".pkg.tar.").next().unwrap_or(fname);
     let without_arch = base.rsplit_once('-').map(|(p, _)| p).unwrap_or(base);
     !installed.contains(without_arch)
 }
@@ -118,7 +118,7 @@ pub fn run(all: bool, assume_yes: bool) -> Result<()> {
     for (path, _) in &doomed {
         match fs::remove_file(path) {
             Ok(_) => removed += 1,
-            Err(e) => eprintln!("  {} {}: {}", style::yellow("warn"), path.display(), e),
+            Err(e) => eprintln!("  {} {}: {}", style::yellow("warn"), draw::sanitize(&path.display().to_string()), e),
         }
     }
 

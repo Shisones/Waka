@@ -1,4 +1,4 @@
-use waka::display::draw::display_width;
+use waka::display::draw::{display_width, strip_ansi};
 use waka::display::table::{pad, summary_row_line};
 
 #[test]
@@ -28,6 +28,6 @@ fn pad_does_not_widen_content() {
 
 #[test]
 fn dependency_cells_are_indented() {
-    assert_eq!(waka::display::table::package_cell("libfoo", true), " libfoo");
-    assert_eq!(waka::display::table::package_cell("firefox", false), "firefox");
+    assert_eq!(strip_ansi(&waka::display::table::package_cell("libfoo", true)), " libfoo");
+    assert_eq!(strip_ansi(&waka::display::table::package_cell("firefox", false)), "firefox");
 }

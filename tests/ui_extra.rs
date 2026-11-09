@@ -161,7 +161,7 @@ fn plural_handles_zero_and_one() {
 
 #[test]
 fn package_cell_without_dependency_has_no_indent() {
-    assert_eq!(package_cell("firefox", false), "firefox");
+    assert_eq!(strip_ansi(&package_cell("firefox", false)), "firefox");
 }
 
 #[test]
@@ -332,7 +332,7 @@ fn color_codes_are_stable() {
 
 #[test]
 fn error_prefix_is_plain_when_color_is_off() {
-    assert!(error("bad").starts_with("error:"));
+    assert!(strip_ansi(&error("bad")).starts_with("error:"));
 }
 
 #[test]

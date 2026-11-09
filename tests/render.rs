@@ -1,7 +1,7 @@
 mod common;
 
 use common::download_state;
-use waka::display::draw::display_width;
+use waka::display::draw::{display_width, strip_ansi};
 use waka::display::render::capped_bytes;
 use waka::display::render::pkg_name_from_filename;
 
@@ -114,16 +114,18 @@ fn download_percentage_is_on_the_right() {
 
     let bar = wide.iter().find(|l| l.contains('━')).expect("bar row");
     assert_eq!(display_width(bar), 120, "{bar:?}");
-    let bar_text = bar.trim_end_matches('\u{2502}').trim_end();
+    let bar_plain = strip_ansi(bar);
+    let bar_text = bar_plain.trim_end_matches('\u{2502}').trim_end();
     assert!(bar_text.ends_with("25.0%"), "{bar:?}");
 
     let details = wide.iter().find(|l| l.contains("ETA")).expect("detail row");
-    let rest = details.strip_prefix("\u{2502} ").expect("box prefix");
+    let details_plain = strip_ansi(details);
+    let rest = details_plain.strip_prefix("\u{2502} ").expect("box prefix");
     assert!(rest.starts_with("ETA "), "{details:?}");
     assert!(rest.contains("KiB"), "{details:?}");
     assert!(rest.contains("Packages"), "{details:?}");
     assert_eq!(rest.matches('\u{2022}').count(), 2, "one dot after ETA, one between size and speed: {details:?}");
-    let before_border = details.trim_end_matches('\u{2502}').trim_end();
+    let before_border = details_plain.trim_end_matches('\u{2502}').trim_end();
     assert!(before_border.ends_with("/s"), "speed should sit on the right: {details:?}");
 
     let narrow = s.build_at(30, 24);

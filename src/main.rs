@@ -28,7 +28,11 @@ fn main() {
 
 fn exit_with(e: anyhow::Error) -> ! {
     if e.downcast_ref::<waka::Aborted>().is_some() {
-        std::process::exit(1);
+        let code = if waka::alpm::transaction::was_interrupted() { 130 } else { 1 };
+        std::process::exit(code);
+    }
+    if waka::alpm::transaction::was_interrupted() {
+        std::process::exit(130);
     }
     eprintln!(
         "{}",

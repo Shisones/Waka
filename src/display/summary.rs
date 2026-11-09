@@ -1,7 +1,7 @@
 use crate::display::{format as fmt, style, table};
 use std::collections::HashSet;
 
-pub(crate) fn show_upgrade_summary(add: &alpm::AlpmList<&alpm::Package>, rm: &alpm::AlpmList<&alpm::Package>, local: &alpm::Db) {
+pub(crate) fn show_upgrade_summary(add: &alpm::AlpmList<&alpm::Package>, rm: &alpm::AlpmList<&alpm::Package>, local: &alpm::Db, cachedirs: &[String]) {
     println!();
     table::write_summary_row(&style::bold("Package"), &style::bold("Old Ver"), &style::bold("New Ver"), &style::bold("Net Change"), &style::bold("Size"));
     table::write_separator();
@@ -18,8 +18,9 @@ pub(crate) fn show_upgrade_summary(add: &alpm::AlpmList<&alpm::Package>, rm: &al
         let old_ver = old.map(|o| o.version().to_string()).unwrap_or_default();
         let old_size = old.map(|o| o.isize()).unwrap_or(0);
         let net_change = pkg.isize() - old_size;
-        table::write_summary_row(&table::package_cell(pkg.name(), dependency), &old_ver, pkg.version(), &fmt::format_size(net_change), &fmt::format_size(pkg.download_size()));
-        total_dl += pkg.download_size();
+        let remaining = remaining_download(pkg, cachedirs);
+        table::write_summary_row(&table::package_cell(pkg.name(), dependency), &old_ver, pkg.version(), &fmt::format_size(net_change), &fmt::format_size(remaining));
+        total_dl += remaining;
         total_isize += pkg.isize();
         net_upgrade += net_change;
     }
@@ -40,13 +41,13 @@ pub(crate) fn show_upgrade_summary(add: &alpm::AlpmList<&alpm::Package>, rm: &al
 }
 
 
-pub(crate) fn show_install_summary(add: &alpm::AlpmList<&alpm::Package>, rm: &alpm::AlpmList<&alpm::Package>, explicit: &[String]) {
+pub(crate) fn show_install_summary(add: &alpm::AlpmList<&alpm::Package>, rm: &alpm::AlpmList<&alpm::Package>, explicit: &[String], cachedirs: &[String]) {
     let add: Vec<&alpm::Package> = add.iter().collect();
     let rm: Vec<&alpm::Package> = rm.iter().collect();
-    render_install_summary(&add, &rm, explicit);
+    render_install_summary(&add, &rm, explicit, cachedirs);
 }
 
-fn render_install_summary(add: &[&alpm::Package], rm: &[&alpm::Package], explicit: &[String]) {
+fn render_install_summary(add: &[&alpm::Package], rm: &[&alpm::Package], explicit: &[String], cachedirs: &[String]) {
     println!();
     table::write_summary_row(&style::bold("Package"), &style::bold("Old Ver"), &style::bold("New Ver"), &style::bold("Net Change"), &style::bold("Size"));
     table::write_separator();
@@ -59,8 +60,9 @@ fn render_install_summary(add: &[&alpm::Package], rm: &[&alpm::Package], explici
     explicit_pkgs.sort_by(|a, b| a.name().cmp(b.name()));
 
     for pkg in &explicit_pkgs {
-        table::write_summary_row(&table::package_cell(pkg.name(), false), "", pkg.version(), &fmt::format_size(pkg.isize()), &fmt::format_size(pkg.download_size()));
-        total_dl += pkg.download_size();
+        let remaining = remaining_download(pkg, cachedirs);
+        table::write_summary_row(&table::package_cell(pkg.name(), false), "", pkg.version(), &fmt::format_size(pkg.isize()), &fmt::format_size(remaining));
+        total_dl += remaining;
         total_isize += pkg.isize();
 
         let mut deps: Vec<&str> = Vec::new();
@@ -78,8 +80,9 @@ fn render_install_summary(add: &[&alpm::Package], rm: &[&alpm::Package], explici
         for name in deps {
             dep_count += 1;
             if let Some(dep) = add.iter().find(|p| p.name() == name) {
-                table::write_summary_row(&table::package_cell(name, true), "", dep.version(), &fmt::format_size(dep.isize()), &fmt::format_size(dep.download_size()));
-                total_dl += dep.download_size();
+                let remaining = remaining_download(dep, cachedirs);
+                table::write_summary_row(&table::package_cell(name, true), "", dep.version(), &fmt::format_size(dep.isize()), &fmt::format_size(remaining));
+                total_dl += remaining;
                 total_isize += dep.isize();
             }
         }
@@ -93,14 +96,15 @@ fn render_install_summary(add: &[&alpm::Package], rm: &[&alpm::Package], explici
     remaining.sort_by(|a, b| a.name().cmp(b.name()));
     for pkg in remaining {
         dep_count += 1;
+        let remaining = remaining_download(pkg, cachedirs);
         table::write_summary_row(
             &table::package_cell(pkg.name(), true),
             "",
             pkg.version(),
             &fmt::format_size(pkg.isize()),
-            &fmt::format_size(pkg.download_size()),
+            &fmt::format_size(remaining),
         );
-        total_dl += pkg.download_size();
+        total_dl += remaining;
         total_isize += pkg.isize();
     }
 
@@ -126,4 +130,41 @@ fn render_install_summary(add: &[&alpm::Package], rm: &[&alpm::Package], explici
         ("Total Installed Size", &fmt::format_size(total_isize)),
         ("Net Upgrade Size", &fmt::format_size(total_isize - total_freed)),
     ]);
+}
+
+/// Bytes still missing from the cache for this package.
+pub(crate) fn remaining_download(pkg: &alpm::Package, cachedirs: &[String]) -> i64 {
+    let total = pkg.download_size();
+    if total <= 0 {
+        return total;
+    }
+    let version = pkg
+        .version()
+        .as_str()
+        .split_once(':')
+        .map(|(_, value)| value)
+        .unwrap_or(pkg.version().as_str());
+    let arch = pkg.arch().unwrap_or("any");
+    let prefix = format!("{}-{}-{}.pkg.tar.", pkg.name(), version, arch);
+    let mut part = 0u64;
+    let mut complete = false;
+    for dir in cachedirs {
+        let Ok(entries) = std::fs::read_dir(dir) else { continue; };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !name.starts_with(&prefix) || name.ends_with(".sig") {
+                continue;
+            }
+            if name.ends_with(".part") {
+                part = part.max(entry.metadata().map(|m| m.len()).unwrap_or(0));
+            } else {
+                complete = true;
+            }
+        }
+    }
+    if complete {
+        0
+    } else {
+        (total - part as i64).max(0)
+    }
 }

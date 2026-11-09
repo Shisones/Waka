@@ -91,7 +91,8 @@ pub fn run(packages: &[String], assume_yes: bool) -> Result<()> {
 
     let add = h.trans_add();
     let rm = h.trans_remove();
-    show_install_summary(&add, &rm, &explicit);
+    let cachedirs: Vec<String> = h.cachedirs().iter().map(|dir| dir.to_string()).collect();
+    show_install_summary(&add, &rm, &explicit, &cachedirs);
 
     if !assume_yes && !render::confirm(&style::bold("\n Do you want to continue? [Y/n] ")) {
         transaction::end_trans(h);
@@ -102,6 +103,7 @@ pub fn run(packages: &[String], assume_yes: bool) -> Result<()> {
 
     {
         let mut state = shared.lock().unwrap();
+        state.rendered = 0;
         state.total_pkgs = add.len();
         for pkg in add.iter() {
             let size = pkg.download_size();

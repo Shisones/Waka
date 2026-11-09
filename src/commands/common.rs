@@ -50,15 +50,20 @@ pub(crate) fn commit_epilogue(
     filter: &str,
 ) -> Result<()> {
     transaction::end_trans(h);
+    let interrupted = transaction::was_interrupted();
     {
         let mut state = shared.lock().unwrap();
         state.phase = true;
         state.log.retain(|l| !l.contains(filter));
         match &commit_result {
+            _ if interrupted => state.log.push(style::red("Aborted.").to_string()),
             Ok(_) => state.log.push(style::green("Transaction completed successfully").to_string()),
             Err(e) => state.log.push(format!("{}: {}", style::red("Failed"), commit_detail(e))),
         }
         state.render();
+    }
+    if interrupted {
+        return Err(crate::aborted());
     }
     commit_result.map_err(|e| anyhow::anyhow!("commit failed: {}", commit_detail(&e)))?;
     Ok(())

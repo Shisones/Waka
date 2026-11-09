@@ -107,8 +107,6 @@ pub fn run(all: bool, assume_yes: bool) -> Result<()> {
     println!(" {} {} {} \u{00b7} {} will be freed",
         style::cyan("info"), doomed.len(), table::plural("file", doomed.len()), fmt::format_size(freed));
 
-    println!();
-
     if !assume_yes && !render::confirm(&style::bold("\n Clear package cache? [Y/n] ")) {
         eprintln!(" {}", style::red("Aborted."));
         return Err(crate::aborted());

@@ -11,7 +11,7 @@ fn pkgbuild_disables_the_debug_package() {
 
 #[test]
 fn all_versions_match() {
-    let expected = "0.1.6";
+    let expected = "0.1.7";
     assert!(read("Cargo.toml").contains(&format!("version = \"{expected}\"")));
     assert!(read("PKGBUILD").contains(&format!("pkgver={expected}")));
     assert!(read("dist/PKGBUILD").contains(&format!("pkgver={expected}")));
